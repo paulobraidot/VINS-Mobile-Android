@@ -64,6 +64,8 @@ jobs:
               id 'com.android.application'
           }
 
+          def rootDirFile = rootProject.rootDir
+
           android {
               namespace 'com.vins.mobile'
               compileSdk 33
@@ -77,23 +79,33 @@ jobs:
 
                   externalNativeBuild {
                       ndkBuild {
-                          arguments "NDK_APPLICATION_MK:=${rootProject.file('jni/Application.mk').absolutePath}"
+                          arguments "NDK_APPLICATION_MK:=${rootDirFile}/jni/Application.mk"
                       }
                   }
               }
 
               externalNativeBuild {
                   ndkBuild {
-                      path rootProject.file('jni/Android.mk')
+                      path "${rootDirFile}/jni/Android.mk"
                   }
               }
 
               sourceSets {
                   main {
-                      manifest.srcFile rootProject.file('AndroidManifest.xml')
-                      java.srcDirs = [rootProject.file('src')]
-                      res.srcDirs = [rootProject.file('res')]
-                      assets.srcDirs = [rootProject.file('assets')]
+                      // Determina la ruta real sin fallar en la validación de inputs de Gradle
+                      def manifestPath = new File(rootDirFile, 'AndroidManifest.xml').exists() ? 
+                                         new File(rootDirFile, 'AndroidManifest.xml') : 
+                                         new File(projectDir, 'src/main/AndroidManifest.xml')
+                      
+                      manifest.srcFile manifestPath
+
+                      def javaDir = new File(rootDirFile, 'src').exists() ? new File(rootDirFile, 'src') : new File(projectDir, 'src/main/java')
+                      def resDir = new File(rootDirFile, 'res').exists() ? new File(rootDirFile, 'res') : new File(projectDir, 'src/main/res')
+                      def assetsDir = new File(rootDirFile, 'assets').exists() ? new File(rootDirFile, 'assets') : new File(projectDir, 'src/main/assets')
+
+                      java.srcDirs = [javaDir]
+                      res.srcDirs = [resDir]
+                      assets.srcDirs = [assetsDir]
                   }
               }
           }
