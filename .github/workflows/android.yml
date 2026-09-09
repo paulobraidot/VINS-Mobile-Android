@@ -90,10 +90,11 @@ jobs:
 
               sourceSets {
                   main {
-                      manifest.srcFile '../AndroidManifest.xml'
-                      java.srcDirs = ['../src']
-                      res.srcDirs = ['../res']
-                      assets.srcDirs = ['../assets']
+                      // Si tu estructura es heredada (legacy Eclipse / Makefile directo en raíz):
+                      manifest.srcFile file('../AndroidManifest.xml').exists() ? '../AndroidManifest.xml' : 'src/main/AndroidManifest.xml'
+                      java.srcDirs = file('../src').exists() ? ['../src'] : ['src/main/java']
+                      res.srcDirs = file('../res').exists() ? ['../res'] : ['src/main/res']
+                      assets.srcDirs = file('../assets').exists() ? ['../assets'] : ['src/main/assets']
                   }
               }
           }
