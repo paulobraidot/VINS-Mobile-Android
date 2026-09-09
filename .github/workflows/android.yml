@@ -33,7 +33,24 @@ jobs:
 
       - name: Bootstrap Gradle Project Files
         run: |
-          echo "include ':app'" > settings.gradle
+          cat << 'EOF' > settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          include ':app'
+          EOF
           
           cat << 'EOF' > build.gradle
           plugins {
