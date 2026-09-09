@@ -77,24 +77,23 @@ jobs:
 
                   externalNativeBuild {
                       ndkBuild {
-                          arguments "NDK_APPLICATION_MK:=../jni/Application.mk"
+                          arguments "NDK_APPLICATION_MK:=${rootProject.file('jni/Application.mk').absolutePath}"
                       }
                   }
               }
 
               externalNativeBuild {
                   ndkBuild {
-                      path "../jni/Android.mk"
+                      path rootProject.file('jni/Android.mk')
                   }
               }
 
               sourceSets {
                   main {
-                      // Si tu estructura es heredada (legacy Eclipse / Makefile directo en raíz):
-                      manifest.srcFile file('../AndroidManifest.xml').exists() ? '../AndroidManifest.xml' : 'src/main/AndroidManifest.xml'
-                      java.srcDirs = file('../src').exists() ? ['../src'] : ['src/main/java']
-                      res.srcDirs = file('../res').exists() ? ['../res'] : ['src/main/res']
-                      assets.srcDirs = file('../assets').exists() ? ['../assets'] : ['src/main/assets']
+                      manifest.srcFile rootProject.file('AndroidManifest.xml')
+                      java.srcDirs = [rootProject.file('src')]
+                      res.srcDirs = [rootProject.file('res')]
+                      assets.srcDirs = [rootProject.file('assets')]
                   }
               }
           }
