@@ -26,10 +26,13 @@ jobs:
       - name: Setup Android SDK
         id: setup-sdk
         uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 11.0
 
-      - name: Install NDK and Build Tools
+      - name: Accept Licenses & Install NDK/Build-Tools
         run: |
-          echo "y" | sdkmanager --install "ndk;25.1.8937393" "build-tools;33.0.1" "platforms;android-33"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;25.1.8937393" "build-tools;33.0.1" "platforms;android-33"
 
       - name: Make Gradle Wrapper Executable
         run: chmod +x ./gradlew
