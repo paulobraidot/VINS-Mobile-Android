@@ -31,11 +31,11 @@ jobs:
           echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;25.1.8937393" "build-tools;33.0.1" "platforms;android-33"
 
-      - name: Make Gradle Wrapper Executable
-        run: chmod +x ./gradlew
+      - name: Regenerate Gradle Wrapper if missing
+        run: gradle wrapper
         working-directory: VINS_Mobile_AndroidPort
 
-      - name: Build APK with Gradle Wrapper
+      - name: Build APK with Gradle
         run: ./gradlew assembleDebug --stacktrace
         working-directory: VINS_Mobile_AndroidPort
         env:
