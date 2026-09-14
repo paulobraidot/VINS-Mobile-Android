@@ -23,13 +23,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Android SDK
-        id: setup-sdk
-        uses: android-actions/setup-android@v3
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
-      - name: Accept Licenses & Install NDK/Build-Tools
+      - name: Install NDK and Build Tools
         run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;25.1.8937393" "build-tools;33.0.1" "platforms;android-33"
 
       - name: Make Gradle Wrapper Executable
@@ -40,7 +39,7 @@ jobs:
         run: ./gradlew assembleDebug --stacktrace
         working-directory: VINS_Mobile_AndroidPort
         env:
-          ANDROID_NDK_HOME: ${{ steps.setup-sdk.outputs.sdk-path }}/ndk/25.1.8937393
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/25.1.8937393
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
