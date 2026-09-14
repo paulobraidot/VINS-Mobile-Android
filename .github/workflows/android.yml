@@ -29,88 +29,20 @@ jobs:
 
       - name: Install NDK and Build Tools
         run: |
-          echo "y" | sdkmanager --install "ndk;25.2.9519653" "build-tools;33.0.1" "platforms;android-33"
+          echo "y" | sdkmanager --install "ndk;25.1.8937393" "build-tools;33.0.1" "platforms;android-33"
 
-      - name: Bootstrap Gradle Project Files
-        run: |
-          cat << 'EOF' > settings.gradle
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
+      - name: Make Gradle Wrapper Executable
+        run: chmod +x ./gradlew
+        working-directory: VINS_Mobile_AndroidPort
 
-          include ':app'
-          EOF
-          
-          cat << 'EOF' > build.gradle
-          plugins {
-              id 'com.android.application' version '8.1.1' apply false
-          }
-          EOF
-
-          mkdir -p app
-          cat << 'EOF' > app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
-
-          android {
-              namespace 'com.vins.mobile'
-              compileSdk 33
-
-              defaultConfig {
-                  applicationId "com.vins.mobile"
-                  minSdk 21
-                  targetSdk 33
-                  versionCode 1
-                  versionName "1.0"
-
-                  externalNativeBuild {
-                      ndkBuild {
-                          arguments "NDK_APPLICATION_MK:=${rootDir}/jni/Application.mk"
-                      }
-                  }
-              }
-
-              externalNativeBuild {
-                  ndkBuild {
-                      path "${rootDir}/jni/Android.mk"
-                  }
-              }
-
-              sourceSets {
-                  main {
-                      manifest.srcFile "${rootDir}/AndroidManifest.xml"
-                      java.srcDirs = ["${rootDir}/src"]
-                      res.srcDirs = ["${rootDir}/res"]
-                      assets.srcDirs = ["${rootDir}/assets"]
-                  }
-              }
-          }
-          EOF
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.1.1'
-
-      - name: Build APK with Gradle
-        run: gradle assembleDebug --stacktrace
+      - name: Build APK with Gradle Wrapper
+        run: ./gradlew assembleDebug --stacktrace
+        working-directory: VINS_Mobile_AndroidPort
         env:
-          ANDROID_NDK_HOME: ${{ steps.setup-sdk.outputs.sdk-path }}/ndk/25.2.9519653
+          ANDROID_NDK_HOME: ${{ steps.setup-sdk.outputs.sdk-path }}/ndk/25.1.8937393
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
           name: VINS-Mobile-Android
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: VINS_Mobile_AndroidPort/app/build/outputs/apk/debug/app-debug.apk
