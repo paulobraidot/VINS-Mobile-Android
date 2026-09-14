@@ -26,8 +26,6 @@ jobs:
       - name: Setup Android SDK
         id: setup-sdk
         uses: android-actions/setup-android@v3
-        with:
-          cmdline-tools-version: 11.0
 
       - name: Accept Licenses & Install NDK/Build-Tools
         run: |
