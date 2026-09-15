@@ -28,6 +28,12 @@ jobs:
         with:
           gradle-version: '7.5'
 
+      - name: Download & Extract OpenCV Android SDK
+        run: |
+          wget -q https://github.com/opencv/opencv/releases/download/3.4.16/opencv-3.4.16-android-sdk.zip -O opencv.zip
+          unzip -q opencv.zip -d $GITHUB_WORKSPACE/opencv_sdk
+          echo "OPENCV_SDK_PATH=$GITHUB_WORKSPACE/opencv_sdk/OpenCV-android-sdk/sdk/native/jni" >> $GITHUB_ENV
+
       - name: Patch Gradle and CMake configurations
         run: |
           # 1. Repositorios y AGP
@@ -53,6 +59,9 @@ jobs:
               sed -i '/cmake_minimum_required/a project(vins_mobile_native)' app/CMakeLists.txt
             fi
           fi
+
+          # 5. Pasar OpenCV_DIR a CMake a través del app/build.gradle
+          sed -i '/externalNativeBuild {/a \        cmake {\n            arguments "-DOpenCV_DIR='"$OPENCV_SDK_PATH"'"\n        }' app/build.gradle
         working-directory: VINS_Mobile_AndroidPort
 
       - name: Install NDK and Build Tools
