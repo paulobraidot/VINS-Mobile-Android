@@ -23,14 +23,17 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle 8.5
+      - name: Setup Gradle 7.5
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: '8.5'
+          gradle-version: '7.5'
 
-      - name: Replace jcenter() with mavenCentral()
+      - name: Patch build.gradle repositories & AGP version
         run: |
-          find . -name "build.gradle" -exec sed -i 's/jcenter()/mavenCentral()/g' {} +
+          # Reemplaza jcenter() por google() y mavenCentral()
+          find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
+          # Actualiza el plugin antiguo de Android (3.0.1 -> 7.4.2) para dar soporte a JDK 17/Gradle 7.5
+          find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:7.4.2/g' {} +
         working-directory: VINS_Mobile_AndroidPort
 
       - name: Install NDK and Build Tools
@@ -39,7 +42,7 @@ jobs:
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;25.1.8937393" "build-tools;33.0.1" "platforms;android-33"
 
       - name: Regenerate Gradle Wrapper
-        run: gradle wrapper --gradle-version 8.5
+        run: gradle wrapper --gradle-version 7.5
         working-directory: VINS_Mobile_AndroidPort
 
       - name: Build APK with Gradle
