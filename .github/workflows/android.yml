@@ -49,11 +49,16 @@ jobs:
 
       - name: Build Ceres Solver via NDK-Build
         run: |
-          NDK_BUILD_PATH="$ANDROID_HOME/ndk/23.1.7779620/ndk-build"
           CERES_JNI_DIR="$GITHUB_WORKSPACE/VINS_Mobile_AndroidPort/app/libs/VINS-Mobile-master/VINS_ThirdPartyLib/ceres-solver/jni"
+          
           if [ -d "$CERES_JNI_DIR" ]; then
-            cd "$CERES_JNI_DIR"
-            $NDK_BUILD_PATH -j$(nproc)
+            # Reemplazar gnustl por c++_static en Application.mk
+            sed -i 's/gnustl_static/c++_static/g' "$CERES_JNI_DIR/Application.mk"
+            sed -i 's/gnustl_shared/c++_shared/g' "$CERES_JNI_DIR/Application.mk"
+
+            # Ejecutar ndk-build
+            NDK_BUILD_PATH="$ANDROID_HOME/ndk/23.1.7779620/ndk-build"
+            $NDK_BUILD_PATH -C "$CERES_JNI_DIR" -j$(nproc)
           fi
 
       - name: Patch Gradle and CMake configurations
