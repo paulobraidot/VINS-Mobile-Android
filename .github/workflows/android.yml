@@ -33,11 +33,8 @@ jobs:
       # Download and setup OpenCV Android SDK
       - name: Download & Setup OpenCV Android SDK
         run: |
-          # Download and extract OpenCV Android SDK
           wget -q https://github.com/opencv/opencv/releases/download/3.4.16/opencv-3.4.16-android-sdk.zip -O opencv.zip
           unzip -q opencv.zip -d $GITHUB_WORKSPACE/opencv_sdk
-          
-          # Export path for CMake discovery
           OPENCV_SDK_PATH="$GITHUB_WORKSPACE/opencv_sdk/OpenCV-android-sdk/sdk/native/jni"
           echo "OPENCV_SDK_PATH=$OPENCV_SDK_PATH" >> $GITHUB_ENV
 
@@ -71,17 +68,10 @@ jobs:
           OPENCV_SDK_PATH: ${{ env.OPENCV_SDK_PATH }}
           BOOST_PATH: ${{ env.BOOST_PATH }}
         run: |
-          # Default namespace used when package removed
           NAMESPACE="com.thkoeln.jmoeller.vins_mobile_androidport"
-
-          # Replace jcenter() with google() and mavenCentral(); bump plugin version
           find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
           find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:8.0.0/g' {} +
-
-          # Insert namespace into android blocks if missing
           find . -name "build.gradle" -exec sh -c 'grep -q "^android {" "$1" && ! grep -q "namespace " "$1" && sed -i "/^android {/a\\    namespace '\''$NAMESPACE'\''" "$1"' _ {} \;
-
-          # Migrate deprecated dependency configurations to modern ones
           find . -name "build.gradle" -exec sed -i \
             -e 's/androidTestCompile /androidTestImplementation /g' \
             -e 's/androidTestCompile(/androidTestImplementation(/g' \
@@ -91,18 +81,10 @@ jobs:
             -e 's/testCompile /testImplementation /g' \
             -e 's/testCompile(/testImplementation(/g' \
             {} +
-
-          # Fix NDK stdlib usages
           find . -name "build.gradle" -exec sed -i '/ANDROID_TOOLCHAIN/d; s/gnustl_static/c++_static/g; s/gnustl_shared/c++_shared/g' {} +
-
-          # Fix CMakeLists.txt: Replace placeholder {path} with actual OPENCV_SDK_PATH
           find . -name "CMakeLists.txt" -exec sed -i "s|{path}|$OPENCV_SDK_PATH|g" {} +
-          
-          # Prepend OpenCV_DIR to root CMakeLists (app/CMakeLists.txt) for inheritance
           sed -i "5i set(OpenCV_DIR \"$OPENCV_SDK_PATH\")" app/CMakeLists.txt
           sed -i "6i set(boost_include_dir \"$BOOST_PATH\")" app/CMakeLists.txt
-
-          # Ensure a project() line exists for CMake files
           find . -name "CMakeLists.txt" -exec sh -c 'grep -q "project(" "$1" || sed -i "/cmake_minimum_required/a project(vins_mobile)" "$1"' _ {} \;
 
       # Ensure gradlew is executable
@@ -154,4 +136,4 @@ jobs:
         if: always()
         with:
           name: VINS-Mobile-Android-Debug
-          path: VINS_Mobile_AndroidPort/app/build/outputs/apk/debug/app-debug.apk
+          path: VINS_Mobile_AndroidPort/app/build/outputs/apk/release/app-debug.apk
