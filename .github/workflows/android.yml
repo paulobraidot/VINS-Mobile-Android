@@ -47,12 +47,17 @@ jobs:
             $ANDROID_HOME/ndk/23.1.7779620/ndk-build -C "$CERES_JNI_DIR" -j$(nproc)
           fi
 
+      - name: Remove package attribute from AndroidManifest.xml
+        working-directory: VINS_Mobile_AndroidPort
+        run: |
+          sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml
+          sed -i 's/<manifest xmlns:android/<manifest xmlns:android/' app/src/main/AndroidManifest.xml
+
       - name: Patch Gradle and CMake configurations
         working-directory: VINS_Mobile_AndroidPort
         run: |
-          # Extract namespace from AndroidManifest.xml
-          NAMESPACE=$(grep -oP 'package="\K[^"]+' app/src/main/AndroidManifest.xml | head -1)
-          [ -z "$NAMESPACE" ] && NAMESPACE="com.vins.mobile"
+          # Extract namespace from old package attribute or use default
+          NAMESPACE="com.thkoeln.jmoeller.vins_mobile_androidport"
           
           # Update repositories and Gradle plugin
           find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
