@@ -28,21 +28,31 @@ jobs:
         with:
           gradle-version: '7.5'
 
-      - name: Patch build.gradle (repositories, AGP & dependencies)
+      - name: Patch Gradle and CMake configurations
         run: |
-          # Reemplaza jcenter() por google() y mavenCentral()
+          # 1. Repositorios y AGP
           find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
-          
-          # Actualiza el Android Gradle Plugin de 3.0.1 a 7.4.2
           find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:7.4.2/g' {} +
           
-          # Migra sintaxis antigua de dependencias a Gradle 7+
+          # 2. Migración de dependencias legacy
           find . -name "build.gradle" -exec sed -i 's/compile /implementation /g' {} +
           find . -name "build.gradle" -exec sed -i 's/compile(/implementation(/g' {} +
           find . -name "build.gradle" -exec sed -i 's/testCompile /testImplementation /g' {} +
           find . -name "build.gradle" -exec sed -i 's/testCompile(/testImplementation(/g' {} +
           find . -name "build.gradle" -exec sed -i 's/androidTestCompile /androidTestImplementation /g' {} +
           find . -name "build.gradle" -exec sed -i 's/androidTestCompile(/androidTestImplementation(/g' {} +
+          
+          # 3. Remover flags obsoletos de NDK (GCC y gnustl)
+          find . -name "build.gradle" -exec sed -i '/ANDROID_TOOLCHAIN/d' {} +
+          find . -name "build.gradle" -exec sed -i 's/gnustl_static/c++_static/g' {} +
+          find . -name "build.gradle" -exec sed -i 's/gnustl_shared/c++_shared/g' {} +
+
+          # 4. Inyectar project() en CMakeLists.txt si falta
+          if [ -f "app/CMakeLists.txt" ]; then
+            if ! grep -q "project(" "app/CMakeLists.txt"; then
+              sed -i '/cmake_minimum_required/a project(vins_mobile_native)' app/CMakeLists.txt
+            fi
+          fi
         working-directory: VINS_Mobile_AndroidPort
 
       - name: Install NDK and Build Tools
