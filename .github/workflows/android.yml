@@ -82,10 +82,15 @@ jobs:
             -e 's/testCompile(/testImplementation(/g' \
             {} +
           find . -name "build.gradle" -exec sed -i '/ANDROID_TOOLCHAIN/d; s/gnustl_static/c++_static/g; s/gnustl_shared/c++_shared/g' {} +
-          find . -name "CMakeLists.txt" -exec sed -i "s|{path}|$OPENCV_SDK_PATH|g" {} +
-          sed -i "5i set(OpenCV_DIR \"$OPENCV_SDK_PATH\")" app/CMakeLists.txt
-          sed -i "6i set(boost_include_dir \"$BOOST_PATH\")" app/CMakeLists.txt
-          find . -name "CMakeLists.txt" -exec sh -c 'grep -q "project(" "$1" || sed -i "/cmake_minimum_required/a project(vins_mobile)" "$1"' _ {} \;
+
+          # Inyectar argumentos globales para CMake en app/build.gradle
+          APP_GRADLE="app/build.gradle"
+          if [ -f "$APP_GRADLE" ]; then
+            sed -i "/externalNativeBuild {/a \\
+            cmake {\\
+                arguments \"-DOpenCV_DIR=${OPENCV_SDK_PATH}\", \"-Dboost_include_dir=${BOOST_PATH}\"\\
+            }" "$APP_GRADLE"
+          fi
 
       # Ensure gradlew is executable
       - name: Grant execute permissions to gradlew
