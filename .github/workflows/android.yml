@@ -50,24 +50,13 @@ jobs:
       - name: Patch Gradle and CMake configurations
         working-directory: VINS_Mobile_AndroidPort
         run: |
-          # Replace repository configurations
           find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
           find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:8.0.0/g' {} +
-          
-          # Migrate deprecated Gradle configurations
-          find . -name "build.gradle" -exec sed -i 's/compile /implementation /g; s/compile(/implementation(/g; s/testCompile /testImplementation /g; s/testCompile(/testImplementation(/g; s/androidTes[...]
-          
-          # Remove obsolete NDK flags
+          find . -name "build.gradle" -exec sed -i 's/compile /implementation /g; s/compile(/implementation(/g; s/testCompile /testImplementation /g; s/testCompile(/testImplementation(/g; s/androidTestCompile /androidTestImplementation /g' {} +
           find . -name "build.gradle" -exec sed -i '/ANDROID_TOOLCHAIN/d; s/gnustl_static/c++_static/g; s/gnustl_shared/c++_shared/g' {} +
-          
-          # Inject environment paths into CMakeLists.txt
           find . -name "CMakeLists.txt" -exec sed -i "1s|^|set(OpenCV_DIR \"${OPENCV_SDK_PATH}\")\n|" {} +
-          
-          # Inject Boost path in ThirdPartyLib CMakeLists.txt
           BOOST_CMAKE="app/libs/VINS-Mobile-master/VINS_ThirdPartyLib/CMakeLists.txt"
           [ -f "$BOOST_CMAKE" ] && sed -i "1s|^|set(boost_include_dir \"${BOOST_PATH}\")\n|" "$BOOST_CMAKE"
-          
-          # Ensure project() declaration in CMakeLists.txt
           find . -name "CMakeLists.txt" -exec sh -c 'grep -q "project(" "$1" || sed -i "/cmake_minimum_required/a project(vins_mobile)" "$1"' _ {} \;
 
       - name: Grant execute permissions to gradlew
