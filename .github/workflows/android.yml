@@ -28,12 +28,15 @@ jobs:
         with:
           gradle-version: '7.5'
 
-      - name: Patch build.gradle repositories & AGP version
+      - name: Patch build.gradle (repositories, AGP & dependencies)
         run: |
           # Reemplaza jcenter() por google() y mavenCentral()
           find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
-          # Actualiza el plugin antiguo de Android (3.0.1 -> 7.4.2) para dar soporte a JDK 17/Gradle 7.5
+          # Actualiza el Android Gradle Plugin de 3.0.1 a 7.4.2
           find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:7.4.2/g' {} +
+          # Migra sintaxis antigua 'compile' a 'implementation'
+          find . -name "build.gradle" -exec sed -i 's/compile /implementation /g' {} +
+          find . -name "build.gradle" -exec sed -i 's/compile(/implementation(/g' {} +
         working-directory: VINS_Mobile_AndroidPort
 
       - name: Install NDK and Build Tools
