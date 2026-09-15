@@ -50,9 +50,21 @@ jobs:
       - name: Patch Gradle and CMake configurations
         working-directory: VINS_Mobile_AndroidPort
         run: |
+          # Extract namespace from AndroidManifest.xml
+          NAMESPACE=$(grep -oP 'package="\K[^"]+' app/src/main/AndroidManifest.xml | head -1)
+          [ -z "$NAMESPACE" ] && NAMESPACE="com.vins.mobile"
+          
           # Update repositories and Gradle plugin
           find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
           find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:8.0.0/g' {} +
+          
+          # Add namespace to android block if not present
+          find . -name "build.gradle" -exec sh -c '
+            if grep -q "^android {" "$1" && ! grep -q "namespace " "$1"; then
+              sed -i "/^android {/a\\    namespace '\''$NAMESPACE'\''" "$1"
+            fi
+          ' _ {} \;
+          
           # Fix all deprecated dependency configurations
           find . -name "build.gradle" -exec sed -i \
             -e 's/androidTestCompile /androidTestImplementation /g' \
@@ -63,8 +75,10 @@ jobs:
             -e 's/testCompile /testImplementation /g' \
             -e 's/testCompile(/testImplementation(/g' \
             {} +
+          
           # Fix NDK and C++ stdlib
           find . -name "build.gradle" -exec sed -i '/ANDROID_TOOLCHAIN/d; s/gnustl_static/c++_static/g; s/gnustl_shared/c++_shared/g' {} +
+          
           # Setup CMake paths
           find . -name "CMakeLists.txt" -exec sed -i "1s|^|set(OpenCV_DIR \"${OPENCV_SDK_PATH}\")\n|" {} +
           [ -f "app/libs/VINS-Mobile-master/VINS_ThirdPartyLib/CMakeLists.txt" ] && sed -i "1s|^|set(boost_include_dir \"${BOOST_PATH}\")\n|" "app/libs/VINS-Mobile-master/VINS_ThirdPartyLib/CMakeLists.txt"
