@@ -32,9 +32,7 @@ jobs:
         run: |
           wget -q https://github.com/opencv/opencv/releases/download/3.4.16/opencv-3.4.16-android-sdk.zip -O opencv.zip
           unzip -q opencv.zip -d $GITHUB_WORKSPACE/opencv_sdk
-          # Exportar ruta a nivel de Runner y archivo GITHUB_ENV
-          OPENCV_PATH="$GITHUB_WORKSPACE/opencv_sdk/OpenCV-android-sdk/sdk/native/jni"
-          echo "OPENCV_SDK_PATH=$OPENCV_PATH" >> $GITHUB_ENV
+          echo "OPENCV_SDK_PATH=$GITHUB_WORKSPACE/opencv_sdk/OpenCV-android-sdk/sdk/native/jni" >> $GITHUB_ENV
 
       - name: Patch Gradle and CMake configurations
         run: |
@@ -55,20 +53,15 @@ jobs:
           find . -name "build.gradle" -exec sed -i 's/gnustl_static/c++_static/g' {} +
           find . -name "build.gradle" -exec sed -i 's/gnustl_shared/c++_shared/g' {} +
 
-          # 4. Inyectar project() en CMakeLists.txt si no existe
+          # 4. Inyectar project() en CMakeLists.txt si falta
           find . -name "CMakeLists.txt" -exec sh -c '
             if ! grep -q "project(" "$1"; then
               sed -i "/cmake_minimum_required/a project(vins_mobile_native)" "$1"
             fi
           ' _ {} \;
 
-          # 5. Inyectar OpenCV_DIR en TODOS los CMakeLists.txt del proyecto
+          # 5. Inyectar OpenCV_DIR al inicio de TODOS los CMakeLists.txt del proyecto
           find . -name "CMakeLists.txt" -exec sed -i "1s|^|set(OpenCV_DIR \"${OPENCV_SDK_PATH}\")\n|" {} +
-
-          # 6. Inyectar argument -DOpenCV_DIR en el build.gradle del módulo app
-          if [ -f "app/build.gradle" ]; then
-            sed -i '/externalNativeBuild {/a \        cmake {\n            arguments "-DOpenCV_DIR='"${OPENCV_SDK_PATH}"'"\n        }' app/build.gradle
-          fi
         working-directory: VINS_Mobile_AndroidPort
 
       - name: Install NDK and Build Tools
