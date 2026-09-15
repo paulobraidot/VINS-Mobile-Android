@@ -2,15 +2,14 @@ name: Android CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,18 +19,13 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Setup Gradle 7.5
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '7.5'
+          java-version: "17"
+          distribution: "temurin"
 
       - name: Install NDK and Build Tools
         run: |
           echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;23.1.7779620" "build-tools;33.0.1" "platforms;android-33"
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;23.1.7779620" "build-tools;34.0.0" "platforms;android-34"
 
       - name: Download & Setup OpenCV Android SDK
         run: |
@@ -41,8 +35,6 @@ jobs:
 
       - name: Download & Setup Boost C++ Libraries
         run: |
-          mkdir -p $GITHUB_WORKSPACE/boost_1_63_0
-          echo "Downloading Boost 1.63.0..."
           curl -sSL "https://downloads.sourceforge.net/project/boost/boost/1.63.0/boost_1_63_0.tar.gz" -o boost.tar.gz
           tar -xzf boost.tar.gz -C $GITHUB_WORKSPACE
           echo "BOOST_PATH=$GITHUB_WORKSPACE/boost_1_63_0" >> $GITHUB_ENV
@@ -50,65 +42,61 @@ jobs:
       - name: Build Ceres Solver via NDK-Build
         run: |
           CERES_JNI_DIR="$GITHUB_WORKSPACE/VINS_Mobile_AndroidPort/app/libs/VINS-Mobile-master/VINS_ThirdPartyLib/ceres-solver/jni"
-          
-          if [ -d "$CERES_JNI_DIR" ]; then
-            # Reemplazar gnustl por c++_static en Application.mk
-            sed -i 's/gnustl_static/c++_static/g' "$CERES_JNI_DIR/Application.mk"
-            sed -i 's/gnustl_shared/c++_shared/g' "$CERES_JNI_DIR/Application.mk"
-
-            # Ejecutar ndk-build
-            NDK_BUILD_PATH="$ANDROID_HOME/ndk/23.1.7779620/ndk-build"
-            $NDK_BUILD_PATH -C "$CERES_JNI_DIR" -j$(nproc)
-          fi
+          [ -d "$CERES_JNI_DIR" ] && {
+            sed -i 's/gnustl_static/c++_static/g; s/gnustl_shared/c++_shared/g' "$CERES_JNI_DIR/Application.mk"
+            $ANDROID_HOME/ndk/23.1.7779620/ndk-build -C "$CERES_JNI_DIR" -j$(nproc)
+          }
 
       - name: Patch Gradle and CMake configurations
+        working-directory: VINS_Mobile_AndroidPort
         run: |
-          # 1. Repositorios y AGP
+          # Replace repository configurations
           find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
-          find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:7.4.2/g' {} +
+          find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:8.0.0/g' {} +
           
-          # 2. Migración de dependencias legacy en Gradle
-          find . -name "build.gradle" -exec sed -i 's/compile /implementation /g' {} +
-          find . -name "build.gradle" -exec sed -i 's/compile(/implementation(/g' {} +
-          find . -name "build.gradle" -exec sed -i 's/testCompile /testImplementation /g' {} +
-          find . -name "build.gradle" -exec sed -i 's/testCompile(/testImplementation(/g' {} +
-          find . -name "build.gradle" -exec sed -i 's/androidTestCompile /androidTestImplementation /g' {} +
-          find . -name "build.gradle" -exec sed -i 's/androidTestCompile(/androidTestImplementation(/g' {} +
+          # Migrate deprecated Gradle configurations
+          find . -name "build.gradle" -exec sed -i 's/compile /implementation /g; s/compile(/implementation(/g; s/testCompile /testImplementation /g; s/testCompile(/testImplementation(/g; s/androidTestCompile /androidTestImplementation /g; s/androidTestCompile(/androidTestImplementation(/g' {} +
           
-          # 3. Remover flags obsoletos de toolchain NDK
-          find . -name "build.gradle" -exec sed -i '/ANDROID_TOOLCHAIN/d' {} +
-          find . -name "build.gradle" -exec sed -i 's/gnustl_static/c++_static/g' {} +
-          find . -name "build.gradle" -exec sed -i 's/gnustl_shared/c++_shared/g' {} +
-
-          # 4. Inyectar OpenCV_DIR en TODOS los archivos CMakeLists.txt
+          # Remove obsolete NDK flags
+          find . -name "build.gradle" -exec sed -i '/ANDROID_TOOLCHAIN/d; s/gnustl_static/c++_static/g; s/gnustl_shared/c++_shared/g' {} +
+          
+          # Inject environment paths into CMakeLists.txt
           find . -name "CMakeLists.txt" -exec sed -i "1s|^|set(OpenCV_DIR \"${OPENCV_SDK_PATH}\")\n|" {} +
-
-          # 5. Inyectar boost_include_dir en el CMakeLists.txt de ThirdPartyLib
+          
+          # Inject Boost path in ThirdPartyLib CMakeLists.txt
           BOOST_CMAKE="app/libs/VINS-Mobile-master/VINS_ThirdPartyLib/CMakeLists.txt"
-          if [ -f "$BOOST_CMAKE" ]; then
-            sed -i "1s|^|set(boost_include_dir \"${BOOST_PATH}\")\n|" "$BOOST_CMAKE"
-          fi
+          [ -f "$BOOST_CMAKE" ] && sed -i "1s|^|set(boost_include_dir \"${BOOST_PATH}\")\n|" "$BOOST_CMAKE"
+          
+          # Ensure project() declaration in CMakeLists.txt
+          find . -name "CMakeLists.txt" -exec sh -c 'grep -q "project(" "$1" || sed -i "/cmake_minimum_required/a project(vins_mobile)" "$1"' _ {} \;
 
-          # 6. Asegurar llamada a project() en CMakeLists principal
-          find . -name "CMakeLists.txt" -exec sh -c '
-            if ! grep -q "project(" "$1"; then
-              sed -i "/cmake_minimum_required/a project(vins_mobile_native)" "$1"
-            fi
-          ' _ {} \;
+      - name: Build Release APK
         working-directory: VINS_Mobile_AndroidPort
-
-      - name: Regenerate Gradle Wrapper
-        run: gradle wrapper --gradle-version 7.5
-        working-directory: VINS_Mobile_AndroidPort
-
-      - name: Build APK with Gradle
-        run: ./gradlew assembleDebug --stacktrace
-        working-directory: VINS_Mobile_AndroidPort
+        run: ./gradlew assembleRelease --stacktrace
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/23.1.7779620
+
+      - name: Sign Release APK
+        working-directory: VINS_Mobile_AndroidPort
+        run: |
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+            -keystore ${{ secrets.KEYSTORE_FILE }} \
+            -storepass ${{ secrets.KEYSTORE_PASSWORD }} \
+            -keypass ${{ secrets.KEY_PASSWORD }} \
+            app/build/outputs/apk/release/app-release-unsigned.apk ${{ secrets.KEY_ALIAS }}
+          mv app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/VINS-Mobile-signed.apk
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VINS-Mobile-Android-Release
+          path: VINS_Mobile_AndroidPort/app/build/outputs/apk/release/VINS-Mobile-signed.apk
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: VINS-Mobile-Android
+          name: VINS-Mobile-Android-Debug
           path: VINS_Mobile_AndroidPort/app/build/outputs/apk/debug/app-debug.apk
+        if: always()
