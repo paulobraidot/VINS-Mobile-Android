@@ -61,7 +61,7 @@ jobs:
           sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml
           sed -i 's/<manifest xmlns:android/<manifest xmlns:android/' app/src/main/AndroidManifest.xml
 
-      # Patch Gradle/CMake files: replace deprecated repos/deps, insert namespace and set OpenCV/Boost paths
+      # Patch Gradle/CMake files: replace deprecated repos/deps, insert namespace
       - name: Patch Gradle and CMake configurations
         working-directory: VINS_Mobile_AndroidPort
         env:
@@ -83,25 +83,18 @@ jobs:
             {} +
           find . -name "build.gradle" -exec sed -i '/ANDROID_TOOLCHAIN/d; s/gnustl_static/c++_static/g; s/gnustl_shared/c++_shared/g' {} +
 
-          # Inyectar argumentos globales para CMake en app/build.gradle
-          APP_GRADLE="app/build.gradle"
-          if [ -f "$APP_GRADLE" ]; then
-            sed -i "/externalNativeBuild {/a \\
-            cmake {\\
-                arguments \"-DOpenCV_DIR=${OPENCV_SDK_PATH}\", \"-Dboost_include_dir=${BOOST_PATH}\"\\
-            }" "$APP_GRADLE"
-          fi
-
       # Ensure gradlew is executable
       - name: Grant execute permissions to gradlew
         working-directory: VINS_Mobile_AndroidPort
         run: chmod +x ./gradlew 2>/dev/null || true
 
-      # Build the Release APK
+      # Build the Release APK passing CMake flags via Gradle property
       - name: Build Release APK
         working-directory: VINS_Mobile_AndroidPort
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/23.1.7779620
+          OPENCV_SDK_PATH: ${{ env.OPENCV_SDK_PATH }}
+          BOOST_PATH: ${{ env.BOOST_PATH }}
         run: |
           set -e
           GRADLE_CMD=""
@@ -113,7 +106,10 @@ jobs:
             sdk install gradle 8.0.2 -y || true
             GRADLE_CMD="gradle"
           fi
-          $GRADLE_CMD assembleRelease --stacktrace
+          
+          $GRADLE_CMD assembleRelease \
+            -Pandroid.cmake.buildArguments="-DOpenCV_DIR=${OPENCV_SDK_PATH} -Dboost_include_dir=${BOOST_PATH}" \
+            --stacktrace
 
       # Sign the release APK only on pushes to master (requires secrets)
       - name: Sign Release APK
@@ -140,5 +136,5 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: VINS-Mobile-Android-Debug
+          name: VINS-Mobile-Android
           path: VINS_Mobile_AndroidPort/app/build/outputs/apk/release/app-debug.apk
