@@ -32,11 +32,17 @@ jobs:
         run: |
           # Reemplaza jcenter() por google() y mavenCentral()
           find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
+          
           # Actualiza el Android Gradle Plugin de 3.0.1 a 7.4.2
           find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:7.4.2/g' {} +
-          # Migra sintaxis antigua 'compile' a 'implementation'
+          
+          # Migra sintaxis antigua de dependencias a Gradle 7+
           find . -name "build.gradle" -exec sed -i 's/compile /implementation /g' {} +
           find . -name "build.gradle" -exec sed -i 's/compile(/implementation(/g' {} +
+          find . -name "build.gradle" -exec sed -i 's/testCompile /testImplementation /g' {} +
+          find . -name "build.gradle" -exec sed -i 's/testCompile(/testImplementation(/g' {} +
+          find . -name "build.gradle" -exec sed -i 's/androidTestCompile /androidTestImplementation /g' {} +
+          find . -name "build.gradle" -exec sed -i 's/androidTestCompile(/androidTestImplementation(/g' {} +
         working-directory: VINS_Mobile_AndroidPort
 
       - name: Install NDK and Build Tools
