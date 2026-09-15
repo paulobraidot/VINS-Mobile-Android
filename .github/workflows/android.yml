@@ -41,7 +41,9 @@ jobs:
 
       - name: Download & Setup Boost C++ Libraries
         run: |
-          wget -q https://boostorg.jfrog.io/artifactory/main/release/1.63.0/source/boost_1_63_0.tar.gz -O boost.tar.gz
+          mkdir -p $GITHUB_WORKSPACE/boost_1_63_0
+          echo "Downloading Boost 1.63.0..."
+          curl -sSL "https://downloads.sourceforge.net/project/boost/boost/1.63.0/boost_1_63_0.tar.gz" -o boost.tar.gz
           tar -xzf boost.tar.gz -C $GITHUB_WORKSPACE
           echo "BOOST_PATH=$GITHUB_WORKSPACE/boost_1_63_0" >> $GITHUB_ENV
 
