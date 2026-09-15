@@ -1,6 +1,6 @@
 name: Android CI
 
-# Disparadores del workflow
+# Workflow triggers
 on:
   push:
     branches: ["master"]
@@ -12,97 +12,95 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # Clona el repositorio (incluye submódulos recursivos)
+      # Clone repository with submodules
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      # Prepara JDK 17 requerido por Gradle/Android
+      # Setup JDK 17 for Gradle/Android
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: "17"
           distribution: "temurin"
 
-      # Instala NDK y Android Build Tools necesarios
+      # Install NDK and Build Tools
       - name: Install NDK and Build Tools
         run: |
           echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;23.1.7779620" "build-tools;34.0.0" "platforms;android-34"
 
-      # Descarga y expone la ruta del SDK de OpenCV para CMake/NDK
+      # Download OpenCV Android SDK
       - name: Download & Setup OpenCV Android SDK
         run: |
           wget -q https://github.com/opencv/opencv/releases/download/3.4.16/opencv-3.4.16-android-sdk.zip -O opencv.zip
           unzip -q opencv.zip -d $GITHUB_WORKSPACE/opencv_sdk
           echo "OPENCV_SDK_PATH=$GITHUB_WORKSPACE/opencv_sdk/OpenCV-android-sdk/sdk/native/jni" >> $GITHUB_ENV
 
-      # Descarga Boost y exporta ruta para CMake
+      # Download Boost C++ Libraries
       - name: Download & Setup Boost C++ Libraries
         run: |
           curl -sSL "https://downloads.sourceforge.net/project/boost/boost/1.63.0/boost_1_63_0.tar.gz" -o boost.tar.gz
           tar -xzf boost.tar.gz -C $GITHUB_WORKSPACE
           echo "BOOST_PATH=$GITHUB_WORKSPACE/boost_1_63_0" >> $GITHUB_ENV
 
-      # Compila Ceres (si existe el directorio JNI)
+      # Compile Ceres Solver
       - name: Build Ceres Solver via NDK-Build
         run: |
           CERES_JNI_DIR="$GITHUB_WORKSPACE/VINS_Mobile_AndroidPort/app/libs/VINS-Mobile-master/VINS_ThirdPartyLib/ceres-solver/jni"
-          [ -d "$CERES_JNI_DIR" ] && {
+          if [ -d "$CERES_JNI_DIR" ]; then
             sed -i 's/gnustl_static/c++_static/g; s/gnustl_shared/c++_shared/g' "$CERES_JNI_DIR/Application.mk"
             $ANDROID_HOME/ndk/23.1.7779620/ndk-build -C "$CERES_JNI_DIR" -j$(nproc)
-          }
+          fi
 
-      # Parchea Gradle/CMake en el proyecto para compatibilidad moderna
+      # Patch Gradle and CMake for modern compatibility
       - name: Patch Gradle and CMake configurations
         working-directory: VINS_Mobile_AndroidPort
         run: |
-          # Reemplaza jcenter por google() y mavenCentral; actualiza plugin Gradle y dependencias obsoletas
+          # Update repositories and Gradle plugin
           find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
           find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:8.0.0/g' {} +
-          find . -name "build.gradle" -exec sed -i 's/compile /implementation /g; s/compile(/implementation(/g; s/testCompile /testImplementation /g; s/testCompile(/testImplementation(/g; s/androidTestCompile /androidTestImplementation /g; s/androidTestCompile(/androidTestImplementation(/g' {} +
+          # Update deprecated dependency configurations
+          find . -name "build.gradle" -exec sed -i 's/compile /implementation /g; s/compile(/implementation(/g; s/testCompile /testImplementation /g; s/testCompile(/testImplementation(/g; s/androidTestCompile /androidTestImplementation /g' {} +
+          # Fix NDK toolchain and C++ stdlib
           find . -name "build.gradle" -exec sed -i '/ANDROID_TOOLCHAIN/d; s/gnustl_static/c++_static/g; s/gnustl_shared/c++_shared/g' {} +
-          # Inserta OpenCV_DIR al inicio de los CMakeLists
+          # Setup CMake paths
           find . -name "CMakeLists.txt" -exec sed -i "1s|^|set(OpenCV_DIR \"${OPENCV_SDK_PATH}\")\n|" {} +
-          # Inserta ruta Boost si existe el CMake específico
           BOOST_CMAKE="app/libs/VINS-Mobile-master/VINS_ThirdPartyLib/CMakeLists.txt"
           [ -f "$BOOST_CMAKE" ] && sed -i "1s|^|set(boost_include_dir \"${BOOST_PATH}\")\n|" "$BOOST_CMAKE"
-          # Asegura que los CMakeLists tengan una declaración project()
+          # Ensure CMakeLists have project() declaration
           find . -name "CMakeLists.txt" -exec sh -c 'grep -q "project(" "$1" || sed -i "/cmake_minimum_required/a project(vins_mobile)" "$1"' _ {} \;
 
-      # Asegura permisos ejecutables sobre gradlew si existe
+      # Grant execute permissions
       - name: Grant execute permissions to gradlew
         working-directory: VINS_Mobile_AndroidPort
-        run: chmod +x ./gradlew || true
+        run: chmod +x ./gradlew 2>/dev/null || true
 
-      # Construye el APK: intenta gradle wrapper; si falla (por ejemplo falta gradle-wrapper.jar)
-      # instala Gradle via SDKMAN y usa gradle del sistema como fallback.
+      # Build Release APK with fallback to system Gradle
       - name: Build Release APK
         working-directory: VINS_Mobile_AndroidPort
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/23.1.7779620
         run: |
-          # Intento 1: usar el Gradle Wrapper local si está presente
-          if [ -x ./gradlew ]; then
-            echo "Usando ./gradlew si está disponible"
-            ./gradlew assembleRelease --stacktrace || WRAPPER_FAILED=1
+          set -e
+          GRADLE_CMD=""
+          
+          # Try wrapper first
+          if [ -x ./gradlew ] && [ -f gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "Using Gradle wrapper"
+            GRADLE_CMD="./gradlew"
           else
-            WRAPPER_FAILED=1
-          fi
-          # Si el wrapper falla o falta, instalar Gradle y ejecutar build con gradle del sistema
-          if [ "${WRAPPER_FAILED:-}" = "1" ]; then
-            echo "Gradle wrapper ausente o falló; instalando Gradle vía SDKMAN y usando gradle del sistema"
-            # Instala SDKMAN (no interactivo) y Gradle; si ya existe, SDKMAN salta
+            echo "Gradle wrapper unavailable, installing system Gradle"
             curl -s "https://get.sdkman.io" | bash
-            # Inicializa SDKMAN en el shell actual
             source "$HOME/.sdkman/bin/sdkman-init.sh"
-            # Instala una versión compatible de Gradle (ajustable)
-            sdk install gradle 8.0.2 || sdk install gradle
-            # Ejecuta la build con el gradle instalado, apuntando al proyecto actual
-            gradle -p . assembleRelease --stacktrace
+            sdk install gradle 8.0.2 -y || true
+            GRADLE_CMD="gradle"
+          fi
+          
+          $GRADLE_CMD assembleRelease --stacktrace
 
-      # Firma el APK (solo en pushes a master)
+      # Sign Release APK (master pushes only)
       - name: Sign Release APK
         working-directory: VINS_Mobile_AndroidPort
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
@@ -114,7 +112,7 @@ jobs:
             app/build/outputs/apk/release/app-release-unsigned.apk ${{ secrets.KEY_ALIAS }}
           mv app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/VINS-Mobile-signed.apk
 
-      # Sube APK firmado como artifact (solo en pushes a master)
+      # Upload signed APK as artifact
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
@@ -122,10 +120,10 @@ jobs:
           name: VINS-Mobile-Android-Release
           path: VINS_Mobile_AndroidPort/app/build/outputs/apk/release/VINS-Mobile-signed.apk
 
-      # Siempre sube el APK de debug como artifact (útil para PRs/CI)
+      # Upload debug APK
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: VINS-Mobile-Android-Debug
           path: VINS_Mobile_AndroidPort/app/build/outputs/apk/debug/app-debug.apk
-        if: always()
