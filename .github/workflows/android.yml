@@ -28,11 +28,31 @@ jobs:
         with:
           gradle-version: '7.5'
 
-      - name: Download & Extract OpenCV Android SDK
+      - name: Install NDK and Build Tools
+        run: |
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;23.1.7779620" "build-tools;33.0.1" "platforms;android-33"
+
+      - name: Download & Setup OpenCV Android SDK
         run: |
           wget -q https://github.com/opencv/opencv/releases/download/3.4.16/opencv-3.4.16-android-sdk.zip -O opencv.zip
           unzip -q opencv.zip -d $GITHUB_WORKSPACE/opencv_sdk
           echo "OPENCV_SDK_PATH=$GITHUB_WORKSPACE/opencv_sdk/OpenCV-android-sdk/sdk/native/jni" >> $GITHUB_ENV
+
+      - name: Download & Setup Boost C++ Libraries
+        run: |
+          wget -q https://boostorg.jfrog.io/artifactory/main/release/1.63.0/source/boost_1_63_0.tar.gz -O boost.tar.gz
+          tar -xzf boost.tar.gz -C $GITHUB_WORKSPACE
+          echo "BOOST_PATH=$GITHUB_WORKSPACE/boost_1_63_0" >> $GITHUB_ENV
+
+      - name: Build Ceres Solver via NDK-Build
+        run: |
+          NDK_BUILD_PATH="$ANDROID_HOME/ndk/23.1.7779620/ndk-build"
+          CERES_JNI_DIR="$GITHUB_WORKSPACE/VINS_Mobile_AndroidPort/app/libs/VINS-Mobile-master/VINS_ThirdPartyLib/ceres-solver/jni"
+          if [ -d "$CERES_JNI_DIR" ]; then
+            cd "$CERES_JNI_DIR"
+            $NDK_BUILD_PATH -j$(nproc)
+          fi
 
       - name: Patch Gradle and CMake configurations
         run: |
@@ -40,7 +60,7 @@ jobs:
           find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
           find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:7.4.2/g' {} +
           
-          # 2. Migración de dependencias legacy
+          # 2. Migración de dependencias legacy en Gradle
           find . -name "build.gradle" -exec sed -i 's/compile /implementation /g' {} +
           find . -name "build.gradle" -exec sed -i 's/compile(/implementation(/g' {} +
           find . -name "build.gradle" -exec sed -i 's/testCompile /testImplementation /g' {} +
@@ -48,26 +68,27 @@ jobs:
           find . -name "build.gradle" -exec sed -i 's/androidTestCompile /androidTestImplementation /g' {} +
           find . -name "build.gradle" -exec sed -i 's/androidTestCompile(/androidTestImplementation(/g' {} +
           
-          # 3. Remover flags obsoletos de NDK (GCC y gnustl)
+          # 3. Remover flags obsoletos de toolchain NDK
           find . -name "build.gradle" -exec sed -i '/ANDROID_TOOLCHAIN/d' {} +
           find . -name "build.gradle" -exec sed -i 's/gnustl_static/c++_static/g' {} +
           find . -name "build.gradle" -exec sed -i 's/gnustl_shared/c++_shared/g' {} +
 
-          # 4. Inyectar project() en CMakeLists.txt si falta
+          # 4. Inyectar OpenCV_DIR en TODOS los archivos CMakeLists.txt
+          find . -name "CMakeLists.txt" -exec sed -i "1s|^|set(OpenCV_DIR \"${OPENCV_SDK_PATH}\")\n|" {} +
+
+          # 5. Inyectar boost_include_dir en el CMakeLists.txt de ThirdPartyLib
+          BOOST_CMAKE="app/libs/VINS-Mobile-master/VINS_ThirdPartyLib/CMakeLists.txt"
+          if [ -f "$BOOST_CMAKE" ]; then
+            sed -i "1s|^|set(boost_include_dir \"${BOOST_PATH}\")\n|" "$BOOST_CMAKE"
+          fi
+
+          # 6. Asegurar llamada a project() en CMakeLists principal
           find . -name "CMakeLists.txt" -exec sh -c '
             if ! grep -q "project(" "$1"; then
               sed -i "/cmake_minimum_required/a project(vins_mobile_native)" "$1"
             fi
           ' _ {} \;
-
-          # 5. Inyectar OpenCV_DIR al inicio de TODOS los CMakeLists.txt del proyecto
-          find . -name "CMakeLists.txt" -exec sed -i "1s|^|set(OpenCV_DIR \"${OPENCV_SDK_PATH}\")\n|" {} +
         working-directory: VINS_Mobile_AndroidPort
-
-      - name: Install NDK and Build Tools
-        run: |
-          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;25.1.8937393" "build-tools;33.0.1" "platforms;android-33"
 
       - name: Regenerate Gradle Wrapper
         run: gradle wrapper --gradle-version 7.5
@@ -77,7 +98,7 @@ jobs:
         run: ./gradlew assembleDebug --stacktrace
         working-directory: VINS_Mobile_AndroidPort
         env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/25.1.8937393
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/23.1.7779620
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
