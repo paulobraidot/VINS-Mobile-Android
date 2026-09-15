@@ -59,9 +59,6 @@ jobs:
               sed -i '/cmake_minimum_required/a project(vins_mobile_native)' app/CMakeLists.txt
             fi
           fi
-
-          # 5. Pasar OpenCV_DIR a CMake a través del app/build.gradle
-          sed -i '/externalNativeBuild {/a \        cmake {\n            arguments "-DOpenCV_DIR='"$OPENCV_SDK_PATH"'"\n        }' app/build.gradle
         working-directory: VINS_Mobile_AndroidPort
 
       - name: Install NDK and Build Tools
@@ -74,7 +71,7 @@ jobs:
         working-directory: VINS_Mobile_AndroidPort
 
       - name: Build APK with Gradle
-        run: ./gradlew assembleDebug --stacktrace
+        run: ./gradlew assembleDebug -Pandroid.cmake.buildArguments="-DOpenCV_DIR=${{ env.OPENCV_SDK_PATH }}" --stacktrace
         working-directory: VINS_Mobile_AndroidPort
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/25.1.8937393
