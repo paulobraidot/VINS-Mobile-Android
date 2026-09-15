@@ -60,12 +60,12 @@ jobs:
             fi
           fi
 
-          # 5. Inyectar OpenCV_DIR directamente en app/CMakeLists.txt antes de find_package
+          # 5. Inyectar OpenCV_DIR directamente en los CMakeLists.txt usando la variable de entorno
           if [ -f "app/CMakeLists.txt" ]; then
-            sed -i '1s|^|set(OpenCV_DIR "'"$OPENCV_SDK_PATH"'")\n|' app/CMakeLists.txt
+            sed -i "1s|^|set(OpenCV_DIR \"${OPENCV_SDK_PATH}\")\n|" app/CMakeLists.txt
           fi
           if [ -f "libs/VINS-Mobile-master/CMakeLists.txt" ]; then
-            sed -i '1s|^|set(OpenCV_DIR "'"$OPENCV_SDK_PATH"'")\n|' libs/VINS-Mobile-master/CMakeLists.txt
+            sed -i "1s|^|set(OpenCV_DIR \"${OPENCV_SDK_PATH}\")\n|" libs/VINS-Mobile-master/CMakeLists.txt
           fi
         working-directory: VINS_Mobile_AndroidPort
 
