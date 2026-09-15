@@ -55,7 +55,7 @@ jobs:
           find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:8.0.0/g' {} +
           
           # Migrate deprecated Gradle configurations
-          find . -name "build.gradle" -exec sed -i 's/compile /implementation /g; s/compile(/implementation(/g; s/testCompile /testImplementation /g; s/testCompile(/testImplementation(/g; s/androidTestCompile /androidTestImplementation /g; s/androidTestCompile(/androidTestImplementation(/g' {} +
+          find . -name "build.gradle" -exec sed -i 's/compile /implementation /g; s/compile(/implementation(/g; s/testCompile /testImplementation /g; s/testCompile(/testImplementation(/g; s/androidTes[...]
           
           # Remove obsolete NDK flags
           find . -name "build.gradle" -exec sed -i '/ANDROID_TOOLCHAIN/d; s/gnustl_static/c++_static/g; s/gnustl_shared/c++_shared/g' {} +
@@ -69,6 +69,10 @@ jobs:
           
           # Ensure project() declaration in CMakeLists.txt
           find . -name "CMakeLists.txt" -exec sh -c 'grep -q "project(" "$1" || sed -i "/cmake_minimum_required/a project(vins_mobile)" "$1"' _ {} \;
+
+      - name: Grant execute permissions to gradlew
+        working-directory: VINS_Mobile_AndroidPort
+        run: chmod +x ./gradlew
 
       - name: Build Release APK
         working-directory: VINS_Mobile_AndroidPort
