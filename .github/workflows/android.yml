@@ -92,7 +92,7 @@ jobs:
           
           find . -name "CMakeLists.txt" -exec sed -i '/{path}/d' {} +
 
-          # Sobrescribir app/CMakeLists.txt forzando resolución circular de símbolos estáticos con --start-group
+          # Sobrescribir app/CMakeLists.txt usando target_link_options
           cat << 'EOF' > app/CMakeLists.txt
             cmake_minimum_required(VERSION 3.18.1)
             project(VINS_App)
@@ -120,10 +120,11 @@ jobs:
             
             find_library(log-lib log)
             
+            target_link_options(NativeLib PRIVATE "LINKER:--start-group")
+            
             target_link_libraries(
                 NativeLib
                 PRIVATE
-                -Wl,--start-group
                 VINS_Android
                 VINSMobile
                 DBoW
@@ -133,11 +134,12 @@ jobs:
                 Delaunay
                 ceres
                 ${OpenCV_LIBS}
-                -Wl,--end-group
                 ${log-lib}
                 android
             )
-            EOF
+            
+            target_link_options(NativeLib PRIVATE "LINKER:--end-group")
+          EOF
 
       # 9. Grant permissions to gradlew
       - name: Grant execute permissions to gradlew
