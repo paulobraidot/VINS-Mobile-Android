@@ -2,9 +2,9 @@ name: Android CI
 
 on:
   push:
-    branches: ["master" ]
+    branches: ["master"]
   pull_request:
-    branches: ["master" ]
+    branches: ["master"]
   workflow_dispatch:
 
 jobs:
@@ -17,20 +17,20 @@ jobs:
         with:
           submodules: recursive
 
-      # 2. Configurar Java 17 (Requerido por AGP y Gradle modernos)
+      # 2. Configurar Java 17
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: "17"
           distribution: "temurin"
 
-      # 3. Instalar NDK (v23c) y CMake mediante SDK Manager
+      # 3. Instalar NDK (v23c), CMake y Build Tools
       - name: Install Android NDK & CMake
         run: |
           echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;23.1.7779620" "cmake;3.22.1" "platforms;android-34" "build-tools;34.0.0"
 
-      # 4. Descargar y Configurar OpenCV Android SDK (v3.4.16 - compatible con el proyecto)
+      # 4. Descargar y Configurar OpenCV Android SDK (v3.4.16)
       - name: Download & Setup OpenCV Android SDK
         run: |
           wget -q https://github.com/opencv/opencv/releases/download/3.4.16/opencv-3.4.16-android-sdk.zip -O opencv.zip
@@ -38,31 +38,43 @@ jobs:
           OPENCV_SDK_PATH="$GITHUB_WORKSPACE/opencv_sdk/OpenCV-android-sdk/sdk/native/jni"
           echo "OPENCV_SDK_PATH=$OPENCV_SDK_PATH" >> $GITHUB_ENV
 
-      # 5. Descargar y Configurar Boost C++ Libraries (v1.63.0 como indica el README)
+      # 5. Descargar y Configurar Boost C++ Libraries (v1.63.0)
       - name: Download & Setup Boost C++ Libraries
         run: |
           curl -sSL "https://downloads.sourceforge.net/project/boost/boost/1.63.0/boost_1_63_0.tar.gz" -o boost.tar.gz
           tar -xzf boost.tar.gz -C $GITHUB_WORKSPACE
           echo "BOOST_PATH=$GITHUB_WORKSPACE/boost_1_63_0" >> $GITHUB_ENV
 
-      # 6. Compilar Ceres Solver usando ndk-build (según el README)
+      # 6. Compilar Ceres Solver usando ndk-build
       - name: Build Ceres Solver via NDK-Build
         run: |
           CERES_JNI_DIR="$GITHUB_WORKSPACE/VINS_Mobile_AndroidPort/app/libs/VINS-Mobile-master/VINS_ThirdPartyLib/ceres-solver/jni"
           if [ -d "$CERES_JNI_DIR" ]; then
-            # Ajustar Application.mk para arm64-v8a y libc++_static
             echo "APP_ABI := arm64-v8a" > "$CERES_JNI_DIR/Application.mk"
             echo "APP_STL := c++_static" >> "$CERES_JNI_DIR/Application.mk"
             echo "APP_PLATFORM := android-24" >> "$CERES_JNI_DIR/Application.mk"
             
-            # Ejecutar ndk-build
             $ANDROID_HOME/ndk/23.1.7779620/ndk-build -C "$CERES_JNI_DIR" -j$(nproc)
           else
             echo "Error: No se encontró el directorio de Ceres Solver en $CERES_JNI_DIR"
             exit 1
           fi
 
-      # 7. Ajustar configuraciones de Gradle y AndroidManifest
+      # 7. Regenerar/Instalar Gradle Wrapper para corregir ClassNotFoundException
+      - name: Setup Gradle Wrapper
+        working-directory: VINS_Mobile_AndroidPort
+        run: |
+          mkdir -p gradle/wrapper
+          cat << 'EOF' > gradle/wrapper/gradle-wrapper.properties
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.0-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+          gradle wrapper --gradle-version 8.0
+
+      # 8. Ajustar configuraciones de Gradle y AndroidManifest
       - name: Patch Android Project Configuration
         working-directory: VINS_Mobile_AndroidPort
         run: |
@@ -84,14 +96,13 @@ jobs:
             -e 's/androidTestCompile/androidTestImplementation/g' \
             -e 's/testCompile/testImplementation/g' {} +
 
-      # 8. Reemplazar y estructurar CMakeLists.txt globalmente
+      # 9. Reemplazar y estructurar CMakeLists.txt globalmente
       - name: Configure CMake and Link Dependencies
         working-directory: VINS_Mobile_AndroidPort
         env:
           OPENCV_SDK_PATH: ${{ env.OPENCV_SDK_PATH }}
           BOOST_PATH: ${{ env.BOOST_PATH }}
         run: |
-          # Sobrescribir app/CMakeLists.txt con el enlazado estricto de librerías nativas
           cat << 'EOF' > app/CMakeLists.txt
           cmake_minimum_required(VERSION 3.18.1)
           project(VINS_App)
@@ -99,13 +110,11 @@ jobs:
           set(CMAKE_CXX_STANDARD 14)
           add_compile_options(-Wno-format -Wno-format-security -Wno-macro-redefined -Wno-error)
 
-          # Rutas de dependencias externas
           set(OpenCV_DIR "$ENV{OPENCV_SDK_PATH}" CACHE PATH "OpenCV Dir" FORCE)
           set(boost_include_dir "$ENV{BOOST_PATH}" CACHE PATH "Boost Dir" FORCE)
 
           find_package(OpenCV REQUIRED)
 
-          # Inclusión global de cabeceras de Boost y Eigen
           include_directories(
               "$ENV{BOOST_PATH}"
               "${CMAKE_CURRENT_SOURCE_DIR}/libs/VINS-Mobile-master/VINS_ThirdPartyLib/eigen3"
@@ -113,21 +122,17 @@ jobs:
               "${CMAKE_CURRENT_SOURCE_DIR}/libs/VINS-Mobile-master/VINS_ThirdPartyLib/ceres-solver/config"
           )
 
-          # Importar libceres.a generado por ndk-build
           set(CERES_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libs/VINS-Mobile-master/VINS_ThirdPartyLib/ceres-solver/obj/local/${ANDROID_ABI}")
           add_library(ceres STATIC IMPORTED)
           set_target_properties(ceres PROPERTIES IMPORTED_LOCATION "${CERES_LIB_DIR}/libceres.a")
 
-          # Agregar subdirectorios del proyecto
           add_subdirectory(libs/VINS-Mobile-master)
           add_subdirectory(src/main/cpp/VINS_Android)
 
-          # Declarar objetivo JNI Principal
           add_library(NativeLib SHARED src/main/cpp/jni/nativelib.cpp)
 
           find_library(log-lib log)
 
-          # Enlace de librerías dentro del grupo para resolver dependencias circulares
           target_link_libraries(
               NativeLib
               PRIVATE
@@ -147,12 +152,12 @@ jobs:
           )
           EOF
 
-      # 9. Otorgar permisos de ejecución al Wrapper de Gradle
+      # 10. Otorgar permisos de ejecución al Wrapper de Gradle
       - name: Grant execute permissions to gradlew
         working-directory: VINS_Mobile_AndroidPort
-        run: chmod +x ./gradlew 2>/dev/null || true
+        run: chmod +x ./gradlew
 
-      # 10. Compilar la aplicación (Release APK)
+      # 11. Compilar la aplicación (Release APK)
       - name: Build Release APK
         working-directory: VINS_Mobile_AndroidPort
         env:
@@ -160,12 +165,11 @@ jobs:
           OPENCV_SDK_PATH: ${{ env.OPENCV_SDK_PATH }}
           BOOST_PATH: ${{ env.BOOST_PATH }}
         run: |
-          set -e
           ./gradlew assembleRelease \
             -Pandroid.cmake.buildArguments="-DOpenCV_DIR=${OPENCV_SDK_PATH} -Dboost_include_dir=${BOOST_PATH} -DANDROID_STL=c++_static" \
             --stacktrace
 
-      # 11. Subir el APK de Release generado
+      # 12. Subir el APK de Release generado
       - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         if: success()
@@ -173,10 +177,10 @@ jobs:
           name: VINS-Mobile-Android-Release
           path: VINS_Mobile_AndroidPort/app/build/outputs/apk/release/*.apk
 
-      # 12. Subir APKs de Debug si la compilación falla o para inspección
+      # 13. Subir artefactos si falla o para diagnóstico
       - name: Upload Debug Artifacts on Failure
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: VINS-Mobile-Android
-          path: VINS_Mobile_AndroidPort/app/build/outputs/apk/
+          path: VINS_Mobile_AndroidPort/app/build/outputs/
