@@ -51,8 +51,8 @@ jobs:
           CERES_JNI_DIR="$GITHUB_WORKSPACE/VINS_Mobile_AndroidPort/app/libs/VINS-Mobile-master/VINS_ThirdPartyLib/ceres-solver/jni"
           if [ -d "$CERES_JNI_DIR" ]; then
             sed -i 's/APP_ABI := .*/APP_ABI := arm64-v8a/g' "$CERES_JNI_DIR/Application.mk"
-            sed -i 's/gnustl_static/c++_static/g; s/gnustl_shared/c++_shared/g' "$CERES_JNI_DIR/Application.mk"
-            $ANDROID_HOME/ndk/23.1.7779620/ndk-build -C "$CERES_JNI_DIR" -j$(nproc)
+            sed -i 's/gnustl_static/c++_static/g; s/gnustl_shared/c++_static/g' "$CERES_JNI_DIR/Application.mk"
+            $ANDROID_HOME/ndk/23.1.7779620/ndk-build -C "$CERES_JNI_DIR" -j$(nproc) ANDROID_STL=c++_static
           fi
 
       # 7. Remove package attribute from manifest
@@ -70,7 +70,7 @@ jobs:
         run: |
           NAMESPACE="com.thkoeln.jmoeller.vins_mobile_androidport"
           
-          # Parches en archivos build.gradle
+          # Parches Gradle
           find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
           find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:8.0.0/g' {} +
           find . -name "build.gradle" -exec sh -c 'grep -q "^android {" "$1" && ! grep -q "namespace " "$1" && sed -i "/^android {/a\\    namespace '\''$NAMESPACE'\''" "$1"' _ {} \;
@@ -83,16 +83,16 @@ jobs:
             -e 's/testCompile /testImplementation /g' \
             -e 's/testCompile(/testImplementation(/g' \
             {} +
-          find . -name "build.gradle" -exec sed -i '/ANDROID_TOOLCHAIN/d; s/gnustl_static/c++_static/g; s/gnustl_shared/c++_shared/g' {} +
+          find . -name "build.gradle" -exec sed -i '/ANDROID_TOOLCHAIN/d; s/gnustl_static/c++_static/g; s/gnustl_shared/c++_static/g' {} +
 
-          # Sustituir rutas estáticas de README {path}
+          # Parchear placeholders
           sed -i "s|{path}/OpenCV-android-sdk/sdk/native/jni|${OPENCV_SDK_PATH}|g" app/src/main/cpp/VINS_Android/CMakeLists.txt || true
           sed -i "s|{path}/OpenCV-android-sdk/sdk/native/jni|${OPENCV_SDK_PATH}|g" app/libs/VINS-Mobile-master/CMakeLists.txt || true
           sed -i "s|{path}/boost_1_63_0/|${BOOST_PATH}/|g" app/libs/VINS-Mobile-master/VINS_ThirdPartyLib/CMakeLists.txt || true
           
           find . -name "CMakeLists.txt" -exec sed -i '/{path}/d' {} +
 
-          # Sobrescribir app/CMakeLists.txt usando target_link_options
+          # Generar app/CMakeLists.txt con el enlazado en grupo corregido
           cat << 'EOF' > app/CMakeLists.txt
             cmake_minimum_required(VERSION 3.18.1)
             project(VINS_App)
@@ -120,11 +120,10 @@ jobs:
             
             find_library(log-lib log)
             
-            target_link_options(NativeLib PRIVATE "LINKER:--start-group")
-            
             target_link_libraries(
                 NativeLib
                 PRIVATE
+                -Wl,--start-group
                 VINS_Android
                 VINSMobile
                 DBoW
@@ -134,14 +133,13 @@ jobs:
                 Delaunay
                 ceres
                 ${OpenCV_LIBS}
+                -Wl,--end-group
                 ${log-lib}
                 android
             )
-            
-            target_link_options(NativeLib PRIVATE "LINKER:--end-group")
-          EOF
+            EOF
 
-      # 9. Grant permissions to gradlew
+      # 9. Grant execute permissions to gradlew
       - name: Grant execute permissions to gradlew
         working-directory: VINS_Mobile_AndroidPort
         run: chmod +x ./gradlew 2>/dev/null || true
@@ -166,7 +164,7 @@ jobs:
           fi
           
           $GRADLE_CMD assembleRelease \
-            -Pandroid.cmake.buildArguments="-DOpenCV_DIR=${OPENCV_SDK_PATH} -Dboost_include_dir=${BOOST_PATH}" \
+            -Pandroid.cmake.buildArguments="-DOpenCV_DIR=${OPENCV_SDK_PATH} -Dboost_include_dir=${BOOST_PATH} -DANDROID_STL=c++_static" \
             --stacktrace
 
       # 11. Sign Release APK
@@ -184,7 +182,7 @@ jobs:
             mv app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/VINS-Mobile-signed.apk
           fi
 
-      # 12. Upload Artifacts on Master Push
+      # 12. Upload Release APK
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
@@ -192,7 +190,7 @@ jobs:
           name: VINS-Mobile-Android-Release
           path: VINS_Mobile_AndroidPort/app/build/outputs/apk/release/*.apk
 
-      # 13. Always Upload Build Artifacts
+      # 13. Upload Debug/Build Artifacts
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         if: always()
