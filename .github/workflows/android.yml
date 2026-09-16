@@ -17,15 +17,15 @@ jobs:
         with:
           submodules: recursive
 
-      # 2. Configurar Java 17
+      # 2. Configurar JDK 17 (requerido por AGP 8.x)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: "17"
           distribution: "temurin"
 
-      # 3. Instalar NDK (v23c), CMake y Build Tools
-      - name: Install Android NDK & CMake
+      # 3. Instalar NDK, CMake y herramientas de Android SDK
+      - name: Install Android SDK Components & NDK
         run: |
           echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;23.1.7779620" "cmake;3.22.1" "platforms;android-34" "build-tools;34.0.0"
@@ -45,7 +45,7 @@ jobs:
           tar -xzf boost.tar.gz -C $GITHUB_WORKSPACE
           echo "BOOST_PATH=$GITHUB_WORKSPACE/boost_1_63_0" >> $GITHUB_ENV
 
-      # 6. Compilar Ceres Solver usando ndk-build
+      # 6. Compilar Ceres Solver usando NDK-Build
       - name: Build Ceres Solver via NDK-Build
         run: |
           CERES_JNI_DIR="$GITHUB_WORKSPACE/VINS_Mobile_AndroidPort/app/libs/VINS-Mobile-master/VINS_ThirdPartyLib/ceres-solver/jni"
@@ -60,7 +60,31 @@ jobs:
             exit 1
           fi
 
-      # 7. Regenerar/Instalar Gradle Wrapper para corregir ClassNotFoundException
+      # 7. Parchear archivos build.gradle antes de invocar Gradle Wrapper
+      - name: Patch Gradle Files for Modern AGP Compatibility
+        working-directory: VINS_Mobile_AndroidPort
+        run: |
+          # Reemplazar jcenter() por google() y mavenCentral()
+          find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
+          
+          # Actualizar AGP a versión 8.0.0
+          find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:8.0.0/g' {} +
+          
+          # Eliminar el atributo package del AndroidManifest legacy
+          sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml || true
+
+          # Inyectar namespace requerido por AGP 8+
+          NAMESPACE="com.thkoeln.jmoeller.vins_mobile_androidport"
+          find . -name "build.gradle" -exec sh -c 'grep -q "^android {" "$1" && ! grep -q "namespace " "$1" && sed -i "/^android {/a\\    namespace '\''$NAMESPACE'\''" "$1"' _ {} \;
+
+          # Actualizar sintaxis obsoleta de dependencias (compile/provided -> implementation/compileOnly)
+          find . -name "build.gradle" -exec sed -i \
+            -e 's/provided /compileOnly /g' \
+            -e 's/compile /implementation /g' \
+            -e 's/androidTestCompile/androidTestImplementation/g' \
+            -e 's/testCompile/testImplementation/g' {} +
+
+      # 8. Generar e Instalar Gradle Wrapper (Gradle 8.0)
       - name: Setup Gradle Wrapper
         working-directory: VINS_Mobile_AndroidPort
         run: |
@@ -74,30 +98,8 @@ jobs:
           EOF
           gradle wrapper --gradle-version 8.0
 
-      # 8. Ajustar configuraciones de Gradle y AndroidManifest
-      - name: Patch Android Project Configuration
-        working-directory: VINS_Mobile_AndroidPort
-        run: |
-          # Eliminar el atributo package del manifest legacy
-          sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml || true
-
-          # Actualizar repositorios y plugins de Gradle
-          find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
-          find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:8.0.0/g' {} +
-          
-          # Inyectar namespace para compatibilidad con AGP 8+
-          NAMESPACE="com.thkoeln.jmoeller.vins_mobile_androidport"
-          find . -name "build.gradle" -exec sh -c 'grep -q "^android {" "$1" && ! grep -q "namespace " "$1" && sed -i "/^android {/a\\    namespace '\''$NAMESPACE'\''" "$1"' _ {} \;
-          
-          # Reemplazar configuraciones obsoletas de Gradle
-          find . -name "build.gradle" -exec sed -i \
-            -e 's/provided /compileOnly /g' \
-            -e 's/compile /implementation /g' \
-            -e 's/androidTestCompile/androidTestImplementation/g' \
-            -e 's/testCompile/testImplementation/g' {} +
-
-      # 9. Reemplazar y estructurar CMakeLists.txt globalmente
-      - name: Configure CMake and Link Dependencies
+      # 9. Configurar scripts CMake e incluir OpenCV, Boost, Ceres y Eigen
+      - name: Configure CMake Build Scripts
         working-directory: VINS_Mobile_AndroidPort
         env:
           OPENCV_SDK_PATH: ${{ env.OPENCV_SDK_PATH }}
@@ -152,16 +154,16 @@ jobs:
           )
           EOF
 
-      # 10. Otorgar permisos de ejecución al Wrapper de Gradle
+      # 10. Otorgar permisos de ejecución al ejecutable de Gradlew
       - name: Grant execute permissions to gradlew
         working-directory: VINS_Mobile_AndroidPort
         run: chmod +x ./gradlew
 
-      # 11. Compilar la aplicación (Release APK)
+      # 11. Compilar APK de Release pasando variables CXX a CMake
       - name: Build Release APK
         working-directory: VINS_Mobile_AndroidPort
         env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/23.1.7779620
+          ANDROID_NDK_HOME: $ANDROID_HOME/ndk/23.1.7779620
           OPENCV_SDK_PATH: ${{ env.OPENCV_SDK_PATH }}
           BOOST_PATH: ${{ env.BOOST_PATH }}
         run: |
@@ -169,7 +171,7 @@ jobs:
             -Pandroid.cmake.buildArguments="-DOpenCV_DIR=${OPENCV_SDK_PATH} -Dboost_include_dir=${BOOST_PATH} -DANDROID_STL=c++_static" \
             --stacktrace
 
-      # 12. Subir el APK de Release generado
+      # 12. Generar y Subir Artefacto del APK
       - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         if: success()
@@ -177,10 +179,10 @@ jobs:
           name: VINS-Mobile-Android-Release
           path: VINS_Mobile_AndroidPort/app/build/outputs/apk/release/*.apk
 
-      # 13. Subir artefactos si falla o para diagnóstico
-      - name: Upload Debug Artifacts on Failure
+      # 13. Subir Logs y Resultados de diagnóstico en caso de fallo
+      - name: Upload Build Logs on Failure
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: VINS-Mobile-Android
+          name: VINS-Mobile-Android-Build-Logs
           path: VINS_Mobile_AndroidPort/app/build/outputs/
