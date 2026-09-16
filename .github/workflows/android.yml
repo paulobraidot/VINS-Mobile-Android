@@ -92,7 +92,7 @@ jobs:
           
           find . -name "CMakeLists.txt" -exec sed -i '/{path}/d' {} +
 
-          # Generar app/CMakeLists.txt con el enlazado en grupo corregido
+          # Generar app/CMakeLists.txt con el agrupamiento mediante target_link_options
           cat << 'EOF' > app/CMakeLists.txt
             cmake_minimum_required(VERSION 3.18.1)
             project(VINS_App)
@@ -123,7 +123,6 @@ jobs:
             target_link_libraries(
                 NativeLib
                 PRIVATE
-                -Wl,--start-group
                 VINS_Android
                 VINSMobile
                 DBoW
@@ -133,10 +132,11 @@ jobs:
                 Delaunay
                 ceres
                 ${OpenCV_LIBS}
-                -Wl,--end-group
                 ${log-lib}
                 android
             )
+            
+            target_link_options(NativeLib PRIVATE "LINKER:--start-group" "LINKER:--end-group")
             EOF
 
       # 9. Grant execute permissions to gradlew
