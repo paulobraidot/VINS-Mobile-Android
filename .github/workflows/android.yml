@@ -87,7 +87,7 @@ jobs:
           # Limpieza de rutas rotas {path}
           find . -name "CMakeLists.txt" -exec sed -i '/{path}/d' {} +
 
-          # Sobrescribir app/CMakeLists.txt garantizando compatibilidad de flags y rutas externas
+          # Sobrescribir app/CMakeLists.txt limpiando saltos y sintaxis
           cat << 'EOF' > app/CMakeLists.txt
             cmake_minimum_required(VERSION 3.18.1)
             project(VINS_App)
@@ -107,11 +107,7 @@ jobs:
             add_subdirectory(libs/VINS-Mobile-master)
             add_subdirectory(src/main/cpp/VINS_Android)
             
-            add_library(
-                NativeLib
-                SHARED
-                src/main/cpp/jni/nativelib.cpp
-            )
+            add_library(NativeLib SHARED src/main/cpp/jni/nativelib.cpp)
             
             find_library(log-lib log)
             
@@ -129,7 +125,7 @@ jobs:
                 ${log-lib}
                 android
             )
-            EOF
+          EOF
 
       # 9. Ensure gradlew is executable
       - name: Grant execute permissions to gradlew
@@ -167,7 +163,6 @@ jobs:
           jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
             -keystore ${{ secrets.KEYSTORE_FILE }} \
             -storepass ${{ secrets.KEYSTORE_PASSWORD }} \
-            -keypass ${{ secrets.KEY_PASSWORD }} \
             -keypass ${{ secrets.KEY_PASSWORD }} \
             app/build/outputs/apk/release/app-release-unsigned.apk ${{ secrets.KEY_ALIAS }} || true
           
