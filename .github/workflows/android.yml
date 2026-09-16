@@ -61,7 +61,7 @@ jobs:
           sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml
           sed -i 's/<manifest xmlns:android/<manifest xmlns:android/' app/src/main/AndroidManifest.xml
 
-      # Patch Gradle/CMake files: replace deprecated repos/deps, insert namespace
+      # Patch Gradle and CMake configurations
       - name: Patch Gradle and CMake configurations
         working-directory: VINS_Mobile_AndroidPort
         env:
@@ -69,6 +69,8 @@ jobs:
           BOOST_PATH: ${{ env.BOOST_PATH }}
         run: |
           NAMESPACE="com.thkoeln.jmoeller.vins_mobile_androidport"
+          
+          # 1. Parches en archivos build.gradle
           find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
           find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:8.0.0/g' {} +
           find . -name "build.gradle" -exec sh -c 'grep -q "^android {" "$1" && ! grep -q "namespace " "$1" && sed -i "/^android {/a\\    namespace '\''$NAMESPACE'\''" "$1"' _ {} \;
@@ -82,6 +84,14 @@ jobs:
             -e 's/testCompile(/testImplementation(/g' \
             {} +
           find . -name "build.gradle" -exec sed -i '/ANDROID_TOOLCHAIN/d; s/gnustl_static/c++_static/g; s/gnustl_shared/c++_shared/g' {} +
+
+          # 2. Eliminar asignaciones de OpenCV_DIR con {path} en subdirectorios
+          find . -name "CMakeLists.txt" -exec sed -i '/SET(OpenCV_DIR {path}/d' {} +
+
+          # 3. Inyectar project() y las variables OpenCV_DIR / boost_include_dir en el CMakeLists.txt principal
+          sed -i '1a project(VINS_App)' app/CMakeLists.txt
+          sed -i "2a set(OpenCV_DIR \"$OPENCV_SDK_PATH\" CACHE PATH \"OpenCV Dir\" FORCE)" app/CMakeLists.txt
+          sed -i "3a set(boost_include_dir \"$BOOST_PATH\" CACHE PATH \"Boost Dir\" FORCE)" app/CMakeLists.txt
 
       # Ensure gradlew is executable
       - name: Grant execute permissions to gradlew
