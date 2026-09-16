@@ -70,7 +70,7 @@ jobs:
         run: |
           NAMESPACE="com.thkoeln.jmoeller.vins_mobile_androidport"
           
-          # 1. Limpieza de gradle y migración a AndroidX / AGP 8
+          # 1. Parches en archivos build.gradle
           find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
           find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:8.0.0/g' {} +
           find . -name "build.gradle" -exec sh -c 'grep -q "^android {" "$1" && ! grep -q "namespace " "$1" && sed -i "/^android {/a\\    namespace '\''$NAMESPACE'\''" "$1"' _ {} \;
@@ -85,14 +85,55 @@ jobs:
             {} +
           find . -name "build.gradle" -exec sed -i '/ANDROID_TOOLCHAIN/d; s/gnustl_static/c++_static/g; s/gnustl_shared/c++_shared/g' {} +
 
-          # 2. Eliminar cualquier línea en CMake build files que contenga el placeholder roto '{path}'
+          # 2. Eliminar líneas con el placeholder roto '{path}' en todos los CMakeLists.txt
           find . -name "CMakeLists.txt" -exec sed -i '/{path}/d' {} +
 
-          # 3. Inyectar project() y definir Boost/OpenCV globalmente en el CMakeLists raíz de la App
-          sed -i '1a project(VINS_App)' app/CMakeLists.txt
-          sed -i "2a set(OpenCV_DIR \"$OPENCV_SDK_PATH\" CACHE PATH \"OpenCV Dir\" FORCE)" app/CMakeLists.txt
-          sed -i "3a set(boost_include_dir \"$BOOST_PATH\" CACHE PATH \"Boost Dir\" FORCE)" app/CMakeLists.txt
-          sed -i "4a include_directories(\"$BOOST_PATH\")" app/CMakeLists.txt
+          # 3. Reescribir app/CMakeLists.txt con el mapa completo de vinculación
+          cat << 'EOF' > app/CMakeLists.txt
+            cmake_minimum_required(VERSION 3.4.1)
+            project(VINS_App)
+            
+            if(DEFINED ENV{OPENCV_SDK_PATH})
+                set(OpenCV_DIR "$ENV{OPENCV_SDK_PATH}" CACHE PATH "OpenCV Dir" FORCE)
+            endif()
+            
+            if(DEFINED ENV{BOOST_PATH})
+                set(boost_include_dir "$ENV{BOOST_PATH}" CACHE PATH "Boost Dir" FORCE)
+                include_directories("$ENV{BOOST_PATH}")
+            endif()
+            
+            find_package(OpenCV REQUIRED)
+            
+            set(LIB_NAME NativeLib)
+            set(${LIB_NAME}_SRCS
+                src/main/cpp/jni/nativelib.cpp
+            )
+            
+            add_subdirectory(libs/VINS-Mobile-master)
+            add_subdirectory(src/main/cpp/VINS_Android)
+            
+            add_library(
+                ${LIB_NAME}
+                SHARED
+                ${${LIB_NAME}_SRCS}
+            )
+            
+            find_library(log-lib log)
+            
+            target_link_libraries(
+                ${LIB_NAME}
+                VINS_Android
+                VINSMobile
+                DBoW
+                DVision
+                DUtils
+                Loop
+                Delaunay
+                ${OpenCV_LIBS}
+                ${log-lib}
+                android
+            )
+          EOF
 
       # Ensure gradlew is executable
       - name: Grant execute permissions to gradlew
