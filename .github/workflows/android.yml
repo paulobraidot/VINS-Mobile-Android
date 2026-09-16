@@ -70,7 +70,7 @@ jobs:
         run: |
           NAMESPACE="com.thkoeln.jmoeller.vins_mobile_androidport"
           
-          # 1. Parches en archivos build.gradle
+          # 1. Limpieza de gradle y migración a AndroidX / AGP 8
           find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
           find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:8.0.0/g' {} +
           find . -name "build.gradle" -exec sh -c 'grep -q "^android {" "$1" && ! grep -q "namespace " "$1" && sed -i "/^android {/a\\    namespace '\''$NAMESPACE'\''" "$1"' _ {} \;
@@ -85,13 +85,14 @@ jobs:
             {} +
           find . -name "build.gradle" -exec sed -i '/ANDROID_TOOLCHAIN/d; s/gnustl_static/c++_static/g; s/gnustl_shared/c++_shared/g' {} +
 
-          # 2. Eliminar asignaciones de OpenCV_DIR con {path} en subdirectorios
-          find . -name "CMakeLists.txt" -exec sed -i '/SET(OpenCV_DIR {path}/d' {} +
+          # 2. Eliminar cualquier línea en CMake build files que contenga el placeholder roto '{path}'
+          find . -name "CMakeLists.txt" -exec sed -i '/{path}/d' {} +
 
-          # 3. Inyectar project() y las variables OpenCV_DIR / boost_include_dir en el CMakeLists.txt principal
+          # 3. Inyectar project() y definir Boost/OpenCV globalmente en el CMakeLists raíz de la App
           sed -i '1a project(VINS_App)' app/CMakeLists.txt
           sed -i "2a set(OpenCV_DIR \"$OPENCV_SDK_PATH\" CACHE PATH \"OpenCV Dir\" FORCE)" app/CMakeLists.txt
           sed -i "3a set(boost_include_dir \"$BOOST_PATH\" CACHE PATH \"Boost Dir\" FORCE)" app/CMakeLists.txt
+          sed -i "4a include_directories(\"$BOOST_PATH\")" app/CMakeLists.txt
 
       # Ensure gradlew is executable
       - name: Grant execute permissions to gradlew
