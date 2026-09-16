@@ -2,35 +2,35 @@ name: Android CI
 
 on:
   push:
-    branches: ["master"]
+    branches: ["master" ]
   pull_request:
-    branches: ["master"]
+    branches: ["master" ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # 1. Checkout repository with submodules
+      # 1. Checkout del repositorio incluyendo submódulos
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      # 2. Set up Java 17 (Temurin)
+      # 2. Configurar Java 17 (Requerido por AGP y Gradle modernos)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: "17"
           distribution: "temurin"
 
-      # 3. Install Android SDK components (NDK, build-tools, platforms)
-      - name: Install NDK and Build Tools
+      # 3. Instalar NDK (v23c) y CMake mediante SDK Manager
+      - name: Install Android NDK & CMake
         run: |
           echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;23.1.7779620" "build-tools;34.0.0" "platforms;android-34"
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;23.1.7779620" "cmake;3.22.1" "platforms;android-34" "build-tools;34.0.0"
 
-      # 4. Download and setup OpenCV Android SDK
+      # 4. Descargar y Configurar OpenCV Android SDK (v3.4.16 - compatible con el proyecto)
       - name: Download & Setup OpenCV Android SDK
         run: |
           wget -q https://github.com/opencv/opencv/releases/download/3.4.16/opencv-3.4.16-android-sdk.zip -O opencv.zip
@@ -38,113 +38,121 @@ jobs:
           OPENCV_SDK_PATH="$GITHUB_WORKSPACE/opencv_sdk/OpenCV-android-sdk/sdk/native/jni"
           echo "OPENCV_SDK_PATH=$OPENCV_SDK_PATH" >> $GITHUB_ENV
 
-      # 5. Download and setup Boost C++ libraries
+      # 5. Descargar y Configurar Boost C++ Libraries (v1.63.0 como indica el README)
       - name: Download & Setup Boost C++ Libraries
         run: |
           curl -sSL "https://downloads.sourceforge.net/project/boost/boost/1.63.0/boost_1_63_0.tar.gz" -o boost.tar.gz
           tar -xzf boost.tar.gz -C $GITHUB_WORKSPACE
           echo "BOOST_PATH=$GITHUB_WORKSPACE/boost_1_63_0" >> $GITHUB_ENV
 
-      # 6. Build Ceres via ndk-build
+      # 6. Compilar Ceres Solver usando ndk-build (según el README)
       - name: Build Ceres Solver via NDK-Build
         run: |
           CERES_JNI_DIR="$GITHUB_WORKSPACE/VINS_Mobile_AndroidPort/app/libs/VINS-Mobile-master/VINS_ThirdPartyLib/ceres-solver/jni"
           if [ -d "$CERES_JNI_DIR" ]; then
-            sed -i 's/APP_ABI := .*/APP_ABI := arm64-v8a/g' "$CERES_JNI_DIR/Application.mk"
-            sed -i 's/gnustl_static/c++_static/g; s/gnustl_shared/c++_static/g' "$CERES_JNI_DIR/Application.mk"
-            $ANDROID_HOME/ndk/23.1.7779620/ndk-build -C "$CERES_JNI_DIR" -j$(nproc) ANDROID_STL=c++_static
+            # Ajustar Application.mk para arm64-v8a y libc++_static
+            echo "APP_ABI := arm64-v8a" > "$CERES_JNI_DIR/Application.mk"
+            echo "APP_STL := c++_static" >> "$CERES_JNI_DIR/Application.mk"
+            echo "APP_PLATFORM := android-24" >> "$CERES_JNI_DIR/Application.mk"
+            
+            # Ejecutar ndk-build
+            $ANDROID_HOME/ndk/23.1.7779620/ndk-build -C "$CERES_JNI_DIR" -j$(nproc)
+          else
+            echo "Error: No se encontró el directorio de Ceres Solver en $CERES_JNI_DIR"
+            exit 1
           fi
 
-      # 7. Remove package attribute from manifest
-      - name: Remove package attribute from AndroidManifest.xml
+      # 7. Ajustar configuraciones de Gradle y AndroidManifest
+      - name: Patch Android Project Configuration
         working-directory: VINS_Mobile_AndroidPort
         run: |
-          sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml
+          # Eliminar el atributo package del manifest legacy
+          sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml || true
 
-      # 8. Patch Gradle and CMake configurations
-      - name: Patch Gradle and CMake configurations
+          # Actualizar repositorios y plugins de Gradle
+          find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
+          find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:8.0.0/g' {} +
+          
+          # Inyectar namespace para compatibilidad con AGP 8+
+          NAMESPACE="com.thkoeln.jmoeller.vins_mobile_androidport"
+          find . -name "build.gradle" -exec sh -c 'grep -q "^android {" "$1" && ! grep -q "namespace " "$1" && sed -i "/^android {/a\\    namespace '\''$NAMESPACE'\''" "$1"' _ {} \;
+          
+          # Reemplazar configuraciones obsoletas de Gradle
+          find . -name "build.gradle" -exec sed -i \
+            -e 's/provided /compileOnly /g' \
+            -e 's/compile /implementation /g' \
+            -e 's/androidTestCompile/androidTestImplementation/g' \
+            -e 's/testCompile/testImplementation/g' {} +
+
+      # 8. Reemplazar y estructurar CMakeLists.txt globalmente
+      - name: Configure CMake and Link Dependencies
         working-directory: VINS_Mobile_AndroidPort
         env:
           OPENCV_SDK_PATH: ${{ env.OPENCV_SDK_PATH }}
           BOOST_PATH: ${{ env.BOOST_PATH }}
         run: |
-          NAMESPACE="com.thkoeln.jmoeller.vins_mobile_androidport"
-          
-          # Parches Gradle
-          find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
-          find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:8.0.0/g' {} +
-          find . -name "build.gradle" -exec sh -c 'grep -q "^android {" "$1" && ! grep -q "namespace " "$1" && sed -i "/^android {/a\\    namespace '\''$NAMESPACE'\''" "$1"' _ {} \;
-          find . -name "build.gradle" -exec sed -i \
-            -e 's/androidTestCompile /androidTestImplementation /g' \
-            -e 's/androidTestCompile(/androidTestImplementation(/g' \
-            -e 's/provided /compileOnly /g' \
-            -e 's/compile /implementation /g' \
-            -e 's/compile(/implementation(/g' \
-            -e 's/testCompile /testImplementation /g' \
-            -e 's/testCompile(/testImplementation(/g' \
-            {} +
-          find . -name "build.gradle" -exec sed -i '/ANDROID_TOOLCHAIN/d; s/gnustl_static/c++_static/g; s/gnustl_shared/c++_static/g' {} +
-
-          # Parchear placeholders
-          sed -i "s|{path}/OpenCV-android-sdk/sdk/native/jni|${OPENCV_SDK_PATH}|g" app/src/main/cpp/VINS_Android/CMakeLists.txt || true
-          sed -i "s|{path}/OpenCV-android-sdk/sdk/native/jni|${OPENCV_SDK_PATH}|g" app/libs/VINS-Mobile-master/CMakeLists.txt || true
-          sed -i "s|{path}/boost_1_63_0/|${BOOST_PATH}/|g" app/libs/VINS-Mobile-master/VINS_ThirdPartyLib/CMakeLists.txt || true
-          
-          find . -name "CMakeLists.txt" -exec sed -i '/{path}/d' {} +
-
-          # Generar app/CMakeLists.txt válido sin errores de sintaxis
+          # Sobrescribir app/CMakeLists.txt con el enlazado estricto de librerías nativas
           cat << 'EOF' > app/CMakeLists.txt
-            cmake_minimum_required(VERSION 3.18.1)
-            project(VINS_App)
-            
-            add_compile_options(-Wno-format -Wno-format-security -Wno-macro-redefined -Wno-error)
-            
-            if(DEFINED ENV{OPENCV_SDK_PATH})
-                set(OpenCV_DIR "$ENV{OPENCV_SDK_PATH}" CACHE PATH "OpenCV Dir" FORCE)
-            endif()
-            
-            if(DEFINED ENV{BOOST_PATH})
-                include_directories("$ENV{BOOST_PATH}")
-            endif()
-            
-            find_package(OpenCV REQUIRED)
-            
-            set(CERES_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libs/VINS-Mobile-master/VINS_ThirdPartyLib/ceres-solver/obj/local/${ANDROID_ABI}")
-            add_library(ceres STATIC IMPORTED)
-            set_target_properties(ceres PROPERTIES IMPORTED_LOCATION "${CERES_LIB_DIR}/libceres.a")
-            
-            add_subdirectory(libs/VINS-Mobile-master)
-            add_subdirectory(src/main/cpp/VINS_Android)
-            
-            add_library(NativeLib SHARED src/main/cpp/jni/nativelib.cpp)
-            
-            find_library(log-lib log)
-            
-            target_link_libraries(
-                NativeLib
-                PRIVATE
-                "-Wl,--start-group"
-                VINS_Android
-                VINSMobile
-                DBoW
-                DVision
-                DUtils
-                Loop
-                Delaunay
-                ceres
-                ${OpenCV_LIBS}
-                "-Wl,--end-group"
-                ${log-lib}
-                android
-            )
+          cmake_minimum_required(VERSION 3.18.1)
+          project(VINS_App)
+
+          set(CMAKE_CXX_STANDARD 14)
+          add_compile_options(-Wno-format -Wno-format-security -Wno-macro-redefined -Wno-error)
+
+          # Rutas de dependencias externas
+          set(OpenCV_DIR "$ENV{OPENCV_SDK_PATH}" CACHE PATH "OpenCV Dir" FORCE)
+          set(boost_include_dir "$ENV{BOOST_PATH}" CACHE PATH "Boost Dir" FORCE)
+
+          find_package(OpenCV REQUIRED)
+
+          # Inclusión global de cabeceras de Boost y Eigen
+          include_directories(
+              "$ENV{BOOST_PATH}"
+              "${CMAKE_CURRENT_SOURCE_DIR}/libs/VINS-Mobile-master/VINS_ThirdPartyLib/eigen3"
+              "${CMAKE_CURRENT_SOURCE_DIR}/libs/VINS-Mobile-master/VINS_ThirdPartyLib/ceres-solver/include"
+              "${CMAKE_CURRENT_SOURCE_DIR}/libs/VINS-Mobile-master/VINS_ThirdPartyLib/ceres-solver/config"
+          )
+
+          # Importar libceres.a generado por ndk-build
+          set(CERES_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libs/VINS-Mobile-master/VINS_ThirdPartyLib/ceres-solver/obj/local/${ANDROID_ABI}")
+          add_library(ceres STATIC IMPORTED)
+          set_target_properties(ceres PROPERTIES IMPORTED_LOCATION "${CERES_LIB_DIR}/libceres.a")
+
+          # Agregar subdirectorios del proyecto
+          add_subdirectory(libs/VINS-Mobile-master)
+          add_subdirectory(src/main/cpp/VINS_Android)
+
+          # Declarar objetivo JNI Principal
+          add_library(NativeLib SHARED src/main/cpp/jni/nativelib.cpp)
+
+          find_library(log-lib log)
+
+          # Enlace de librerías dentro del grupo para resolver dependencias circulares
+          target_link_libraries(
+              NativeLib
+              PRIVATE
+              -Wl,--start-group
+              VINS_Android
+              VINSMobile
+              DBoW
+              DVision
+              DUtils
+              Loop
+              Delaunay
+              ceres
+              ${OpenCV_LIBS}
+              -Wl,--end-group
+              ${log-lib}
+              android
+          )
           EOF
 
-      # 9. Grant execute permissions to gradlew
+      # 9. Otorgar permisos de ejecución al Wrapper de Gradle
       - name: Grant execute permissions to gradlew
         working-directory: VINS_Mobile_AndroidPort
         run: chmod +x ./gradlew 2>/dev/null || true
 
-      # 10. Build Release APK
+      # 10. Compilar la aplicación (Release APK)
       - name: Build Release APK
         working-directory: VINS_Mobile_AndroidPort
         env:
@@ -153,47 +161,22 @@ jobs:
           BOOST_PATH: ${{ env.BOOST_PATH }}
         run: |
           set -e
-          GRADLE_CMD=""
-          if [ -x ./gradlew ] && [ -f gradle/wrapper/gradle-wrapper.jar ]; then
-            GRADLE_CMD="./gradlew"
-          else
-            curl -s "https://get.sdkman.io" | bash
-            source "$HOME/.sdkman/bin/sdkman-init.sh"
-            sdk install gradle 8.0.2 -y || true
-            GRADLE_CMD="gradle"
-          fi
-          
-          $GRADLE_CMD assembleRelease \
+          ./gradlew assembleRelease \
             -Pandroid.cmake.buildArguments="-DOpenCV_DIR=${OPENCV_SDK_PATH} -Dboost_include_dir=${BOOST_PATH} -DANDROID_STL=c++_static" \
             --stacktrace
 
-      # 11. Sign Release APK
-      - name: Sign Release APK
-        working-directory: VINS_Mobile_AndroidPort
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        run: |
-          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
-            -keystore ${{ secrets.KEYSTORE_FILE }} \
-            -storepass ${{ secrets.KEYSTORE_PASSWORD }} \
-            -keypass ${{ secrets.KEY_PASSWORD }} \
-            app/build/outputs/apk/release/app-release-unsigned.apk ${{ secrets.KEY_ALIAS }} || true
-          
-          if [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then
-            mv app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/VINS-Mobile-signed.apk
-          fi
-
-      # 12. Upload Release APK
-      - name: Upload Release APK
+      # 11. Subir el APK de Release generado
+      - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: success()
         with:
           name: VINS-Mobile-Android-Release
           path: VINS_Mobile_AndroidPort/app/build/outputs/apk/release/*.apk
 
-      # 13. Upload Debug/Build Artifacts
-      - name: Upload Debug APK
+      # 12. Subir APKs de Debug si la compilación falla o para inspección
+      - name: Upload Debug Artifacts on Failure
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: VINS-Mobile-Android-Build
+          name: VINS-Mobile-Android
           path: VINS_Mobile_AndroidPort/app/build/outputs/apk/
