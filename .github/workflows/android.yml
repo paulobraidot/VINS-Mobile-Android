@@ -45,7 +45,7 @@ jobs:
           tar -xzf boost.tar.gz -C $GITHUB_WORKSPACE
           echo "BOOST_PATH=$GITHUB_WORKSPACE/boost_1_63_0" >> $GITHUB_ENV
 
-      # 6. Build Ceres via ndk-build (Tal como especifica el README)
+      # 6. Build Ceres via ndk-build
       - name: Build Ceres Solver via NDK-Build
         run: |
           CERES_JNI_DIR="$GITHUB_WORKSPACE/VINS_Mobile_AndroidPort/app/libs/VINS-Mobile-master/VINS_ThirdPartyLib/ceres-solver/jni"
@@ -55,13 +55,13 @@ jobs:
             $ANDROID_HOME/ndk/23.1.7779620/ndk-build -C "$CERES_JNI_DIR" -j$(nproc)
           fi
 
-      # 7. Remove package attribute from manifest to avoid namespace conflicts
+      # 7. Remove package attribute from manifest
       - name: Remove package attribute from AndroidManifest.xml
         working-directory: VINS_Mobile_AndroidPort
         run: |
           sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml
 
-      # 8. Patch Gradle, OpenCV, Boost & CMake configurations
+      # 8. Patch Gradle and CMake configurations
       - name: Patch Gradle and CMake configurations
         working-directory: VINS_Mobile_AndroidPort
         env:
@@ -70,7 +70,7 @@ jobs:
         run: |
           NAMESPACE="com.thkoeln.jmoeller.vins_mobile_androidport"
           
-          # Parches Gradle
+          # Parches en archivos build.gradle
           find . -name "build.gradle" -exec sed -i 's/jcenter()/google()\n        mavenCentral()/g' {} +
           find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:8.0.0/g' {} +
           find . -name "build.gradle" -exec sh -c 'grep -q "^android {" "$1" && ! grep -q "namespace " "$1" && sed -i "/^android {/a\\    namespace '\''$NAMESPACE'\''" "$1"' _ {} \;
@@ -85,15 +85,14 @@ jobs:
             {} +
           find . -name "build.gradle" -exec sed -i '/ANDROID_TOOLCHAIN/d; s/gnustl_static/c++_static/g; s/gnustl_shared/c++_shared/g' {} +
 
-          # Parchear los placeholders {path} como lo pide el README
+          # Sustituir rutas estáticas de README {path}
           sed -i "s|{path}/OpenCV-android-sdk/sdk/native/jni|${OPENCV_SDK_PATH}|g" app/src/main/cpp/VINS_Android/CMakeLists.txt || true
           sed -i "s|{path}/OpenCV-android-sdk/sdk/native/jni|${OPENCV_SDK_PATH}|g" app/libs/VINS-Mobile-master/CMakeLists.txt || true
           sed -i "s|{path}/boost_1_63_0/|${BOOST_PATH}/|g" app/libs/VINS-Mobile-master/VINS_ThirdPartyLib/CMakeLists.txt || true
           
-          # Limpiar cualquier otro placeholder roto
           find . -name "CMakeLists.txt" -exec sed -i '/{path}/d' {} +
 
-          # Reescribir app/CMakeLists.txt asegurando el enlazado completo de OpenCV y Ceres
+          # Sobrescribir app/CMakeLists.txt forzando resolución circular de símbolos estáticos con --start-group
           cat << 'EOF' > app/CMakeLists.txt
             cmake_minimum_required(VERSION 3.18.1)
             project(VINS_App)
@@ -110,7 +109,6 @@ jobs:
             
             find_package(OpenCV REQUIRED)
             
-            # Importar Ceres desde la salida de ndk-build
             set(CERES_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libs/VINS-Mobile-master/VINS_ThirdPartyLib/ceres-solver/obj/local/${ANDROID_ABI}")
             add_library(ceres STATIC IMPORTED)
             set_target_properties(ceres PROPERTIES IMPORTED_LOCATION "${CERES_LIB_DIR}/libceres.a")
@@ -125,6 +123,7 @@ jobs:
             target_link_libraries(
                 NativeLib
                 PRIVATE
+                -Wl,--start-group
                 VINS_Android
                 VINSMobile
                 DBoW
@@ -134,17 +133,18 @@ jobs:
                 Delaunay
                 ceres
                 ${OpenCV_LIBS}
+                -Wl,--end-group
                 ${log-lib}
                 android
             )
-          EOF
+            EOF
 
-      # 9. Ensure gradlew is executable
+      # 9. Grant permissions to gradlew
       - name: Grant execute permissions to gradlew
         working-directory: VINS_Mobile_AndroidPort
         run: chmod +x ./gradlew 2>/dev/null || true
 
-      # 10. Build the Release APK
+      # 10. Build Release APK
       - name: Build Release APK
         working-directory: VINS_Mobile_AndroidPort
         env:
@@ -167,7 +167,7 @@ jobs:
             -Pandroid.cmake.buildArguments="-DOpenCV_DIR=${OPENCV_SDK_PATH} -Dboost_include_dir=${BOOST_PATH}" \
             --stacktrace
 
-      # 11. Sign the release APK only on pushes to master
+      # 11. Sign Release APK
       - name: Sign Release APK
         working-directory: VINS_Mobile_AndroidPort
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
@@ -182,7 +182,7 @@ jobs:
             mv app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/VINS-Mobile-signed.apk
           fi
 
-      # 12. Upload the signed release APK artifact on master pushes
+      # 12. Upload Artifacts on Master Push
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
@@ -190,7 +190,7 @@ jobs:
           name: VINS-Mobile-Android-Release
           path: VINS_Mobile_AndroidPort/app/build/outputs/apk/release/*.apk
 
-      # 13. Always upload debug or build APKs if generated
+      # 13. Always Upload Build Artifacts
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         if: always()
