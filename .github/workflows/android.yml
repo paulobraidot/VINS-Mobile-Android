@@ -86,11 +86,14 @@ jobs:
 
       # 8. Generar e Instalar Gradle Wrapper (Gradle 8.0)
       - name: Setup Gradle Wrapper
-        working-directory: VINS_Mobile_AndroidPort
         run: |
-          touch empty_settings.gradle
-          gradle wrapper --gradle-version 8.0 -c empty_settings.gradle
-          rm empty_settings.gradle
+          TEMP_DIR=$(mktemp -d)
+          cd "$TEMP_DIR"
+          touch settings.gradle
+          gradle wrapper --gradle-version 8.0
+          cp -r gradle "$GITHUB_WORKSPACE/VINS_Mobile_AndroidPort/"
+          cp gradlew gradlew.bat "$GITHUB_WORKSPACE/VINS_Mobile_AndroidPort/"
+          rm -rf "$TEMP_DIR"
 
       # 9. Configurar scripts CMake e incluir OpenCV, Boost, Ceres y Eigen
       - name: Configure CMake Build Scripts
