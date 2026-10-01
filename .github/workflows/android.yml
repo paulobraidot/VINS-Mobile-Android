@@ -88,15 +88,9 @@ jobs:
       - name: Setup Gradle Wrapper
         working-directory: VINS_Mobile_AndroidPort
         run: |
-          mkdir -p gradle/wrapper
-          cat << 'EOF' > gradle/wrapper/gradle-wrapper.properties
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.0-bin.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          EOF
-          gradle wrapper --gradle-version 8.0
+          touch empty_settings.gradle
+          gradle wrapper --gradle-version 8.0 -c empty_settings.gradle
+          rm empty_settings.gradle
 
       # 9. Configurar scripts CMake e incluir OpenCV, Boost, Ceres y Eigen
       - name: Configure CMake Build Scripts
