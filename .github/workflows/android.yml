@@ -89,6 +89,11 @@ jobs:
             -e 's/ANDROID_TOOLCHAIN=gcc/ANDROID_TOOLCHAIN=clang/g' \
             -e 's/ANDROID_STL=gnustl_static/ANDROID_STL=c++_static/g' {} +
 
+          # Reemplazar marcadores {path} en archivos CMakeLists.txt por variables de entorno
+          find . -name "CMakeLists.txt" -exec sed -i \
+            -e 's|{path}/OpenCV-android-sdk/sdk/native/jni|\$ENV{OPENCV_SDK_PATH}|g' \
+            -e 's|{path}/boost_1_63_0/|\$ENV{BOOST_PATH}|g' {} +
+
       # 8. Generar e Instalar Gradle Wrapper (Gradle 8.0)
       - name: Setup Gradle Wrapper
         run: |

@@ -3,7 +3,9 @@ set(${TARGET_NAME}_SRCS
     ViewController.cpp
 )
 
-SET(OpenCV_DIR {path}/OpenCV-android-sdk/sdk/native/jni)
+if(NOT OpenCV_DIR)
+  SET(OpenCV_DIR $ENV{OPENCV_SDK_PATH})
+endif()
 find_package(OpenCV REQUIRED)
 
 add_library(

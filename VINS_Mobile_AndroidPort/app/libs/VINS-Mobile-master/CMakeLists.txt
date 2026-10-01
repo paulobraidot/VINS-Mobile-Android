@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.4.1)
 project(VINSMobile)
 
 # done here so it's not necessary for every target_link_library call of opencv
-SET(OpenCV_DIR {path}/OpenCV-android-sdk/sdk/native/jni)
+if(NOT OpenCV_DIR)
+  SET(OpenCV_DIR $ENV{OPENCV_SDK_PATH})
+endif()
 find_package(OpenCV REQUIRED)
 
 # this is branching into all the subdirectories and thus connecting them all
