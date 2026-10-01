@@ -124,6 +124,7 @@ jobs:
           set(boost_include_dir "$ENV{BOOST_PATH}" CACHE PATH "Boost Dir" FORCE)
 
           find_package(OpenCV REQUIRED)
+          set(OpenCV_LIBS opencv_java)
 
           include_directories(
               "$ENV{BOOST_PATH}"
