@@ -84,6 +84,11 @@ jobs:
             -e 's/androidTestCompile/androidTestImplementation/g' \
             -e 's/testCompile/testImplementation/g' {} +
 
+          # Actualizar Toolchain y STL obsoletos (gcc -> clang, gnustl_static -> c++_static)
+          find . -name "build.gradle" -exec sed -i \
+            -e 's/ANDROID_TOOLCHAIN=gcc/ANDROID_TOOLCHAIN=clang/g' \
+            -e 's/ANDROID_STL=gnustl_static/ANDROID_STL=c++_static/g' {} +
+
       # 8. Generar e Instalar Gradle Wrapper (Gradle 8.0)
       - name: Setup Gradle Wrapper
         run: |
