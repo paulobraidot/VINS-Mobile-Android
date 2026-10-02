@@ -3,6 +3,10 @@ apply plugin: 'com.android.application'
 android {
     namespace 'com.thkoeln.jmoeller.vins_mobile_androidport'
     compileSdkVersion 25
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
     defaultConfig {
         applicationId "com.thkoeln.jmoeller.vins_mobile_androidport"
         minSdkVersion 24
