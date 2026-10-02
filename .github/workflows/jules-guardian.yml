@@ -1,0 +1,28 @@
+name: "Jules Guardian: Auto-Repair Build"
+
+on:
+  workflow_run:
+    workflows: ["Android CI"]
+    types:
+      - completed
+
+jobs:
+  jules-autofix:
+    runs-on: ubuntu-latest
+    # SOLO se ejecuta si el flujo de trabajo del APK falló
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    
+    steps:
+      - name: Checkout del código fallado
+        uses: actions/checkout@v4
+
+      - name: Invocar a Jules para corregir la compilación
+        uses: google-labs-code/jules-action@main
+        with:
+          jules_api_key: ${{ secrets.JULES_API_KEY }}
+          prompt: |
+            El flujo de trabajo de GitHub Actions para generar el APK de Android ha fallado en la compilación.
+            Analiza los registros de error del flujo de trabajo reciente, examina la configuración de Gradle, 
+            el archivo `.github/workflows/android.yml` y cualquier problema de dependencias, 
+            permisos de ejecución (`gradlew`) o de herramientas. Parchea los archivos necesarios de forma 
+            autónoma para solucionar el fallo y asegurar la generación del APK.
