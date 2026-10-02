@@ -1,4 +1,6 @@
-set(boost_include_dir {path}/boost_1_63_0/)
+if(NOT boost_include_dir)
+  set(boost_include_dir $ENV{BOOST_PATH})
+endif()
 add_library(boost_LIB INTERFACE)
 target_include_directories(
     boost_LIB

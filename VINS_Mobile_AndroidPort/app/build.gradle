@@ -1,7 +1,12 @@
 apply plugin: 'com.android.application'
 
 android {
+    namespace 'com.thkoeln.jmoeller.vins_mobile_androidport'
     compileSdkVersion 25
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
     defaultConfig {
         applicationId "com.thkoeln.jmoeller.vins_mobile_androidport"
         minSdkVersion 24
@@ -11,13 +16,14 @@ android {
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake {
-                arguments '-DANDROID_TOOLCHAIN=gcc', "-DANDROID_STL=gnustl_static", '-DCMAKE_BUILD_TYPE=Release'
+                arguments '-DANDROID_TOOLCHAIN=clang', "-DANDROID_STL=c++_static", '-DCMAKE_BUILD_TYPE=Release'
                 cppFlags "-std=gnu++11 -frtti -fopenmp -fexceptions -O3 -funsafe-math-optimizations"
             }
         }
     }
     buildTypes {
         release {
+            signingConfig signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

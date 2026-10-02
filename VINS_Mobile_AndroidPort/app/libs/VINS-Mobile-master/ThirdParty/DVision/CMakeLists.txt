@@ -15,7 +15,7 @@ set(dvision_SRCS
 set(TARGET_NAME DVision)
 add_library(${TARGET_NAME} STATIC ${dvision_SRCS})
 
-target_link_libraries(${TARGET_NAME} opencv_core)
+target_link_libraries(${TARGET_NAME} ${OpenCV_LIBS})
 target_link_libraries(${TARGET_NAME} DUtils)
 target_link_libraries(${TARGET_NAME} boost_LIB)
 
