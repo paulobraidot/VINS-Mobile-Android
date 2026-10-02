@@ -71,10 +71,7 @@ jobs:
           # Actualizar AGP a versión 8.0.0
           find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:3.0.1/com.android.tools.build:gradle:8.0.0/g' {} +
           
-          # Eliminar el atributo package del AndroidManifest legacy
-          sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml || true
-
-          # Inyectar namespace requerido por AGP 8+
+          # Inyectar namespace requerido por AGP 8+ si no esta presente
           NAMESPACE="com.thkoeln.jmoeller.vins_mobile_androidport"
           find . -name "build.gradle" -exec sh -c 'grep -q "^android {" "$1" && ! grep -q "namespace " "$1" && sed -i "/^android {/a\\    namespace '\''$NAMESPACE'\''" "$1"' _ {} \;
 

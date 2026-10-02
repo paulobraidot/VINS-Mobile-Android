@@ -1,6 +1,7 @@
 apply plugin: 'com.android.application'
 
 android {
+    namespace 'com.thkoeln.jmoeller.vins_mobile_androidport'
     compileSdkVersion 25
     defaultConfig {
         applicationId "com.thkoeln.jmoeller.vins_mobile_androidport"
