@@ -3,10 +3,13 @@ set(${TARGET_NAME}_SRCS
     ViewController.cpp
 )
 
-if(NOT OpenCV_DIR)
-  SET(OpenCV_DIR $ENV{OPENCV_SDK_PATH})
+if(NOT OpenCV_FOUND)
+  if(NOT OpenCV_DIR)
+    SET(OpenCV_DIR $ENV{OPENCV_SDK_PATH})
+  endif()
+  find_package(OpenCV REQUIRED)
 endif()
-find_package(OpenCV REQUIRED)
+set(OpenCV_LIBS opencv_java)
 
 add_library(
     ${TARGET_NAME}
