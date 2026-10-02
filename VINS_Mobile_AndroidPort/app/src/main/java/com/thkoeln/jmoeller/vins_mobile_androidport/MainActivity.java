@@ -1,5 +1,7 @@
 package com.thkoeln.jmoeller.vins_mobile_androidport;
 
+import com.thkoeln.jmoeller.vins_mobile_androidport.R;
+
 import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageInfo;
