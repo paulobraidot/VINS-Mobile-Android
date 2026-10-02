@@ -9,7 +9,6 @@ if(NOT OpenCV_FOUND)
   endif()
   find_package(OpenCV REQUIRED)
 endif()
-set(OpenCV_LIBS opencv_java)
 
 add_library(
     ${TARGET_NAME}

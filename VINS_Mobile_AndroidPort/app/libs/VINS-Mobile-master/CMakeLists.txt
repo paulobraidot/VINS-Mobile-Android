@@ -8,7 +8,6 @@ if(NOT OpenCV_FOUND)
   endif()
   find_package(OpenCV REQUIRED)
 endif()
-set(OpenCV_LIBS opencv_java)
 
 # this is branching into all the subdirectories and thus connecting them all
 add_subdirectory(VINS_ThirdPartyLib)
