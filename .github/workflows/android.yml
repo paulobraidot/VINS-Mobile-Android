@@ -96,6 +96,18 @@ jobs:
             -e 's|{path}/boost_1_63_0/|\$ENV{BOOST_PATH}|g' \
             -e 's|opencv_core|\${OpenCV_LIBS}|g' {} +
 
+          # Actualizar constantes de conversión de color de OpenCV 3 a OpenCV 4
+          find . \( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.mm" \) -exec sed -i \
+            -e 's/CV_YUV2RGBA_NV21/cv::COLOR_YUV2RGBA_NV21/g' \
+            -e 's/CV_RGB2GRAY/cv::COLOR_RGB2GRAY/g' \
+            -e 's/CV_RGBA2GRAY/cv::COLOR_RGBA2GRAY/g' \
+            -e 's/CV_RGBA2RGB/cv::COLOR_RGBA2RGB/g' \
+            -e 's/CV_RGB2RGBA/cv::COLOR_RGB2RGBA/g' \
+            -e 's/CV_BGRA2RGB/cv::COLOR_BGRA2RGB/g' \
+            -e 's/CV_BGRA2BGR/cv::COLOR_BGRA2BGR/g' \
+            -e 's/CV_RGBA2BGR/cv::COLOR_RGBA2BGR/g' \
+            -e 's/CV_GRAY2BGR/cv::COLOR_GRAY2BGR/g' {} +
+
       # 8. Generar e Instalar Gradle Wrapper (Gradle 8.0)
       - name: Setup Gradle Wrapper
         run: |
