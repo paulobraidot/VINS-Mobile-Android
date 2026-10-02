@@ -50,7 +50,7 @@ jobs:
         run: |
           CERES_JNI_DIR="$GITHUB_WORKSPACE/VINS_Mobile_AndroidPort/app/libs/VINS-Mobile-master/VINS_ThirdPartyLib/ceres-solver/jni"
           if [ -d "$CERES_JNI_DIR" ]; then
-            echo "APP_ABI := arm64-v8a" > "$CERES_JNI_DIR/Application.mk"
+            echo "APP_ABI := arm64-v8a armeabi-v7a" > "$CERES_JNI_DIR/Application.mk"
             echo "APP_STL := c++_static" >> "$CERES_JNI_DIR/Application.mk"
             echo "APP_PLATFORM := android-24" >> "$CERES_JNI_DIR/Application.mk"
             echo "APP_CPPFLAGS := -frtti -fexceptions" >> "$CERES_JNI_DIR/Application.mk"
