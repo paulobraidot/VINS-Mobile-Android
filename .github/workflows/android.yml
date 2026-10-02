@@ -119,6 +119,7 @@ jobs:
 
           set(CMAKE_CXX_STANDARD 14)
           add_compile_options(-Wno-format -Wno-format-security -Wno-macro-redefined -Wno-error)
+          add_link_options("-Wl,--no-fatal-warnings")
 
           set(OpenCV_DIR "$ENV{OPENCV_SDK_PATH}" CACHE PATH "OpenCV Dir" FORCE)
           set(boost_include_dir "$ENV{BOOST_PATH}" CACHE PATH "Boost Dir" FORCE)
@@ -147,6 +148,7 @@ jobs:
           target_link_libraries(
               NativeLib
               PRIVATE
+              -Wl,--no-fatal-warnings
               -Wl,--start-group
               VINS_Android
               VINSMobile
