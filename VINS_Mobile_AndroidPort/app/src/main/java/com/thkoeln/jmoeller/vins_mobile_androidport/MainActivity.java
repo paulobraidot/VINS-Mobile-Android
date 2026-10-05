@@ -102,6 +102,8 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     private final float minVirtualCamDistance = 2;
     private final float maxVirtualCamDistance = 40;
 
+    private boolean isInitialized = false;
+
     /**
      * Gets Called after App start
      */
@@ -111,16 +113,78 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         setContentView(R.layout.activity_main);
         
         // first make sure the necessary permissions are given
-        checkPermissionsIfNeccessary();
-        
-        if(!checkBriefFileExistance()) {
-            Log.e(TAG, "Brief files not found here: " + directoryPathBriefFiles);
-            finish();
+        if (checkPermissionsIfNeccessary()) {
+            startAppInitialization();
         }
-        
-        initLooper();
-        initVINS();
-        initViews();
+    }
+
+    /**
+     * Starts background asset copying if needed and initializes app components.
+     */
+    private void startAppInitialization() {
+        if (isInitialized) return;
+        isInitialized = true;
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                ensureBriefFilesExist();
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        initLooper();
+                        initVINS();
+                        initViews();
+                    }
+                });
+            }
+        }).start();
+    }
+
+    /**
+     * Copies brief_k10L6.bin and brief_pattern.yml from assets to directoryPathBriefFiles if missing.
+     */
+    private void ensureBriefFilesExist() {
+        File directoryFile = new File(directoryPathBriefFiles);
+        if (!directoryFile.exists()) {
+            boolean created = directoryFile.mkdirs();
+            Log.d(TAG, "Created directory " + directoryPathBriefFiles + ": " + created);
+        }
+
+        copyAssetIfNeeded("brief_k10L6.bin");
+        copyAssetIfNeeded("brief_pattern.yml");
+    }
+
+    private void copyAssetIfNeeded(String filename) {
+        File destFile = new File(directoryPathBriefFiles, filename);
+        if (destFile.exists() && destFile.length() > 0) {
+            Log.d(TAG, filename + " already exists at " + destFile.getAbsolutePath());
+            return;
+        }
+
+        Log.d(TAG, "Copying asset " + filename + " to " + destFile.getAbsolutePath());
+        java.io.InputStream in = null;
+        java.io.OutputStream out = null;
+        try {
+            in = getAssets().open(filename);
+            out = new java.io.FileOutputStream(destFile);
+            byte[] buffer = new byte[1024 * 64];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+            out.flush();
+            Log.d(TAG, "Successfully copied asset " + filename);
+        } catch (java.io.IOException e) {
+            Log.e(TAG, "Failed to copy asset " + filename, e);
+        } finally {
+            if (in != null) {
+                try { in.close(); } catch (java.io.IOException e) {}
+            }
+            if (out != null) {
+                try { out.close(); } catch (java.io.IOException e) {}
+            }
+        }
     }
 
     /**
@@ -188,6 +252,9 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
 
         textureView = (TextureView) findViewById(R.id.texture_view);
         textureView.setSurfaceTextureListener(this);
+        if (textureView.isAvailable()) {
+            onSurfaceTextureAvailable(textureView.getSurfaceTexture(), textureView.getWidth(), textureView.getHeight());
+        }
 
         // Define the Switch listeners
         Switch arSwitch = (Switch) findViewById(R.id.ar_switch);
@@ -468,7 +535,10 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                     hasAllPermissions = false;
             }
 
-            if(!hasAllPermissions){
+            if(hasAllPermissions) {
+                startAppInitialization();
+            } else {
+                Log.e(TAG, "Permissions not granted by user.");
                 finish();
             }
         }
