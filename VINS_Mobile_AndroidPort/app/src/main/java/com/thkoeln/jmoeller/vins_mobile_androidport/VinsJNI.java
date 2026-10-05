@@ -12,8 +12,15 @@ import java.nio.ByteBuffer;
  */
 public class VinsJNI implements Serializable {
 
-    // Used to load the 'native-lib' library on application startup.
-    static { System.loadLibrary("NativeLib"); }
+    // Used to load openmp and native-lib libraries on application startup.
+    static {
+        try {
+            System.loadLibrary("omp");
+        } catch (UnsatisfiedLinkError e) {
+            // libomp might already be loaded
+        }
+        System.loadLibrary("NativeLib");
+    }
     
     public native void init();
     
