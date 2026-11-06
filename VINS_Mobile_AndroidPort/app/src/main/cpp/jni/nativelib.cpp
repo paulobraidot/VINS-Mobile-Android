@@ -47,6 +47,11 @@ Java_com_thkoeln_jmoeller_vins_1mobile_1androidport_VinsJNI_onImageAvailable(JNI
 
 //    LOGI("Received image with width: %d height: %d", width, height);
 
+    if (!viewControllerGlobal) {
+        LOGE("viewControllerGlobal is null in onImageAvailable");
+        return;
+    }
+
     double timeStampSec = ViewController::timeStampToSec(timeStamp);
     // IMU Meassurements are momentary meassurements. 
     // Camera over an interval. so the mid of the interval is chosen as the timestamp
@@ -127,7 +132,9 @@ extern "C"
 JNIEXPORT void JNICALL
 Java_com_thkoeln_jmoeller_vins_1mobile_1androidport_VinsJNI_onPause(JNIEnv *env, jclass type) {
     LOGI("Pause triggered, stopping SensorEvents");
-    viewControllerGlobal->imuStopUpdate();
+    if (viewControllerGlobal) {
+        viewControllerGlobal->imuStopUpdate();
+    }
 }
 
 // Constants for ImageView visibility coming from Java
@@ -144,6 +151,10 @@ Java_com_thkoeln_jmoeller_vins_1mobile_1androidport_VinsJNI_updateViewInfo(JNIEn
                                                                          jobject tvFeature,
                                                                          jobject tvBuf,
                                                                          jobject ivInit) {
+
+    if (!viewControllerGlobal) {
+        return;
+    }
 
     // Get the method handles
     jclass tvClass = env->FindClass("android/widget/TextView");
