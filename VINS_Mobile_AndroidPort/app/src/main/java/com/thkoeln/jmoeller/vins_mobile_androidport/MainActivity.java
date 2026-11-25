@@ -498,23 +498,10 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
      * @return true if permissions where given
      */
     private boolean checkPermissionsIfNeccessary() {
-        try {
-            PackageInfo info = getPackageManager().getPackageInfo(this.getPackageName(), PackageManager.GET_PERMISSIONS);
-            if (info.requestedPermissions != null) {
-                List<String> permissionsNotGrantedYet = new ArrayList<>(info.requestedPermissions.length);
-                for (String p : info.requestedPermissions) {
-                    if (ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
-                        permissionsNotGrantedYet.add(p);
-                    }
-                }
-                if(permissionsNotGrantedYet.size() > 0){
-                    ActivityCompat.requestPermissions(this, permissionsNotGrantedYet.toArray(new String[permissionsNotGrantedYet.size()]),
-                                                      PERMISSIONS_REQUEST_CODE);
-                    return false;
-                }
-            }
-        } catch (PackageManager.NameNotFoundException e) {
-            e.printStackTrace();
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA},
+                                              PERMISSIONS_REQUEST_CODE);
+            return false;
         }
 
         return true;
@@ -526,16 +513,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                                            @NonNull int[] grantResults) {
 
         if(requestCode == PERMISSIONS_REQUEST_CODE) {
-            boolean hasAllPermissions = true;
-            // If request is cancelled, the result arrays are empty.
-            if (grantResults.length == 0)
-                hasAllPermissions = false;
-            for (int result : grantResults) {
-                if (result != PackageManager.PERMISSION_GRANTED)
-                    hasAllPermissions = false;
-            }
-
-            if(hasAllPermissions) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 startAppInitialization();
             } else {
                 Log.e(TAG, "Permissions not granted by user.");
